@@ -1,0 +1,125 @@
+---
+title: "Alcohol Hepatitis"
+author: "[Lluís Revilla](mailto:lrevilla@clinic.cat)"
+date: "`r Sys.Date()`"
+output: 
+  BiocStyle::html_document:
+    toc: true
+  BiocStyle::pdf_document:
+    toc: true
+vignette: >
+  % \VignetteEngine{knitr::rmarkdown}
+  % \usepackage[utf8]{inputenc}
+---
+
+```{r style, echo=FALSE, results="asis", message=FALSE}
+BiocStyle::markdown()
+knitr::opts_chunk$set(tidy = FALSE, echo = TRUE)
+```
+
+## Load the data
+
+The data is provided already corrected and log2 transformed in a Excel file. Which I manually converted to csv for a faster reading in R. Also the second sheet of that Excel file had the phenoData used which I stored on a second csv file.
+
+```{r load}
+expression <- read.csv("../data/ALD_ramon/NGS_AHsteps.expr.csv", row.names = 1)
+phenoData <- read.csv("../data/ALD_ramon/NGS_AHsteps.design.csv", row.names = 1)
+```
+
+First we will explore a little bit the data, in case we need to correct something:
+
+```{r exploration1}
+summary(phenoData)
+phenoData
+expression[1:5, 1:5]
+```
+
+So we will delete two colums that has the same information as the column G. And we will use more easily readable names
+```{r pheno}
+phenoData <- phenoData[, c("Sample.id", "G")]
+colnames(phenoData) <- c("Sample", "Status")
+levels(phenoData$Status) <- c("AH", "Non-responders", "Responders", "C.Comp", 
+                              "ASH", "Explants", "HCV", "NASH", "Normal")
+phenoData
+```
+
+To work easier with the data I proceed to create an ExpressionSet
+
+```{r ESet, message=FALSE}
+library("Biobase")
+library("AnnotationDbi")
+eset <- ExpressionSet(as.matrix(expression))
+phenoData(eset) <- AnnotatedDataFrame(phenoData)
+eset
+```
+
+## Check the normalizations applied 
+We take advantatge of the plotMDS function of limma package to plot the MDS of the samples, to see how close are between them. 
+
+```{r plotMDS, message=FALSE}
+library("limma")
+plotMDS(eset, labels = phenoData(eset)$Status, main = "Samples relationships")
+```
+
+We can see that they are clearly separated in two groups, but some samples like the Alcohol Hepatitis samples are on both sites of the first dimension. We can also observe that the cirrhosis compensated samples are closer to the normal or healthy samples than to the explants. 
+
+## Design 
+
+The design we will use to find the differentially expressed genes is the following:
+```{r design}
+names <- make.names(levels(phenoData(eset)$Status)) # To ensure sintactically valid names
+design <- sapply(names, function(x){
+  x <- ifelse(x == "Non.responders", "Non-responders", x)
+  ifelse(phenoData(eset)$Status == x, 1, 0)
+})
+rownames(design) <- rownames(phenoData(eset))
+design
+```
+
+As you can see each group has its own colum to increase the power to the model, and to allow for more informative contrasts
+
+```{r fitting}
+fit <- lmFit(exprs(eset), design)
+```
+
+## Contrasts
+
+We are interested in several contrasts:
+```{r contrasts}
+contrasts <- makeContrasts("ASHvsNormal" = ASH - Normal,
+                          "NASHvsNormal" = NASH - Normal,
+                          "CirrhosisVsNormal" = C.Comp - Normal,
+                          "HCVvsNormal" = HCV - Normal,
+                          "AHvsNormal" = AH - Normal,
+                          "RespondersVsNormal" = Responders - Normal,
+                          "Non-respondersVsNormal" = Non.responders - Normal,
+                          "ExplantsVsNormal" = Explants - Normal,
+                          # Assuming that some status are similar
+                          "FibrosisVsNormal" = (ASH + NASH)/2 - Normal,
+                          "HepatitisVsNormal" = (HCV + AH)/2 - Normal,
+                          "SevereVsNormal" = (Responders + Non.responders)/2 - Normal,
+                          
+                          "ASHvsNASH" = ASH - NASH,
+                          "AHvsASH" = AH - ASH,
+                          "AHvsHCV" = AH - HCV,
+                          
+                          "RespondersVsNon-responders" = Responders - Non.responders,
+                          "Non-respondersVsAH" = Non.responders - AH,
+                          "RespondersVsAH" = Responders - AH,
+                          
+                          "ExplantsVsResponders" = Explants - Responders,
+                          "ExplantsVsNon-responders" = Explants - Non.responders,
+                          
+                          levels = design)
+contrasts
+```
+
+
+```{r contrast_fit}
+fit2 <- contrasts.fit(fit, contrasts)
+results <- decideTests(fit2)
+summary(results)
+```
+
+
+
