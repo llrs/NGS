@@ -173,6 +173,27 @@ It is a good idea to store the data, not only the program of your analysis, so h
 ```{r store_ALD}
 save(fit, fit2, fit2.2, fit.2, design, design2, ALD, contrasts, file = "ALD.RData")
 ```
+
+## Differentially expressed genes
+
+
+```{r DEG_ALD}
+par(mfrow = c(12, 2))
+out <- sapply(colnames(results), function(x) {
+  tt.ALD <- topTable(fit2, coef = x, sort.by = "logFC", number = Inf)
+  tt.ALD <- tt.ALD[order(-abs(tt.ALD$logFC)), ]
+  plot(density(tt.ALD[1:2000, "logFC"]), 
+       main = paste("Distribution of the top 2000 DEG in", x))
+  hist(tt.ALD[1:2000, "logFC"], 
+       main = paste("Distribution of the top 2000 DEG in", x))
+})
+par(mfrow = c(1, 2))
+tt.ALD2 <- topTable(fit2.2, coef = "Progression", sort.by = "logFC", number = Inf)
+tt.ALD2 <- tt.ALD2[order(-abs(tt.ALD2$logFC)), ]
+plot(density(tt.ALD2[1:2000, "logFC"]), main = "Distribution of the top 2000 DEG")
+hist(tt.ALD2[1:2000, "logFC"], main = "Distribution of the top 2000 DEG")
+```
+
 # Ductular Reaction
 
 This data was extracted from a liver, the POS labels indicate that were extracted from a microdisection with KRT7 positive. NEG indicates that for the same microdisection those not stained for KRT7 where taken. TOTAL indicates that there is a mix of KRT7+ and KRT7- dyeing. Also this data has been already normalized.
@@ -246,6 +267,15 @@ out <- sapply(colnames(results.DR), function(x){
 
 ```{r store_DR}
 save(fit3, fit4, design3, DR, contrasts2,  file = "DR.RData")
+```
+
+## Differentially expressed genes
+```{r DEG_RD}
+tt.DR <- topTable(fit4, coef = "PosVsNegative", sort.by = "logFC", number = Inf)
+tt.DR <- tt.DR[order(-abs(tt.DR$logFC)), ] # Ordered by the absolute value of logFC
+par(mfrow=c(1, 2))
+plot(density(tt.DR[1:2000, "logFC"]), main = "Distribution of the top 2000 DEG")
+hist(tt.DR[1:2000, "logFC"], main = "Distribution of the top 2000 DEG")
 ```
 
 # SessionInfo
