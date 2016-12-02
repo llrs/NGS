@@ -169,8 +169,8 @@ Here we can see on the last plot that the exprsesion of the genes show a bimodal
 
 ## Store data
 It is a good idea to store the data, not only the program of your analysis, so here I go:
-```{r store_DR}
-save(fit, fit2, fit2.2, fit.2, design, design.2, ALD, contrasts, "ALD.RData")
+```{r store_ALD}
+save(fit, fit2, fit2.2, fit.2, design, design2, ALD, contrasts, file = "ALD.RData")
 ```
 # Ductular Reaction
 
@@ -244,7 +244,7 @@ out <- sapply(colnames(results.DR), function(x){
 ## Store the data
 
 ```{r store_DR}
-save(fit3, fit4, design3, DR, contrasts2, "DR.RData")
+save(fit3, fit4, design3, DR, contrasts2,  file = "DR.RData")
 ```
 
 # SessionInfo
