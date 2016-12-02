@@ -2,14 +2,15 @@
 title: "The weight of the ductular reaction in alcohol liver disease"
 author: "[Lluís Revilla](mailto:lrevilla@clinic.cat)"
 date: "`r Sys.Date()`"
-output: 
+output:
   BiocStyle::html_document:
     toc: true
   BiocStyle::pdf_document:
     toc: true
 ---
 
-```{r style, echo=FALSE, results="asis", message=FALSE}
+```{r setup, echo=FALSE, results="asis", message=FALSE}
+BiocStyle::markdown()
 knitr::opts_chunk$set(tidy = FALSE, echo = TRUE, cache = TRUE, autodep = TRUE)
 ```
 

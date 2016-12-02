@@ -75,6 +75,19 @@ document.addEventListener("DOMContentLoaded", function() {
 </ul>
 </div>
 
+<script type="text/javascript">
+document.addEventListener("DOMContentLoaded", function() {
+  document.querySelector("h1").className = "title";
+});
+</script>
+<script type="text/javascript">
+document.addEventListener("DOMContentLoaded", function() {
+  var links = document.links;  
+  for (var i = 0, linksLength = links.length; i < linksLength; i++)
+    if (links[i].hostname != window.location.hostname)
+      links[i].target = '_blank';
+});
+</script>
 <div id="alcohol-liver-disease" class="section level1">
 <h1><span class="header-section-number">1</span> Alcohol liver disease</h1>
 <div id="load-disease-expression" class="section level2">
