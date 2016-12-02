@@ -14,10 +14,10 @@ vignette: >
 
 ```{r style, echo=FALSE, results="asis", message=FALSE}
 BiocStyle::markdown()
-knitr::opts_chunk$set(tidy = FALSE, echo = TRUE)
+knitr::opts_chunk$set(tidy = FALSE, echo = TRUE, cache = TRUE, autodep = TRUE)
 ```
-
-## Load the data
+# Alcohol disease
+## Load disease expression
 
 The data is provided already corrected and log2 transformed in a Excel file. Which I manually converted to csv for a faster reading in R. Also the second sheet of that Excel file had the phenoData used which I stored on a second csv file.
 
@@ -35,12 +35,21 @@ expression[1:5, 1:5]
 ```
 
 So we will delete two colums that has the same information as the column G. And we will use more easily readable names
+
 ```{r pheno}
 phenoData <- phenoData[, c("Sample.id", "G")]
 colnames(phenoData) <- c("Sample", "Status")
 levels(phenoData$Status) <- c("AH", "Non-responders", "Responders", "C.Comp", 
                               "ASH", "Explants", "HCV", "NASH", "Normal")
 phenoData
+```
+
+As we need only the alcohol samples we remove those who aren't from alcohol:
+
+```{r alcohol}
+alcohol <- !phenoData$Status %in% c("HCV", "NASH", "Explants")
+expression <- expression[, alcohol]
+phenoData <- phenoData[alcohol, ]
 ```
 
 To work easier with the data I proceed to create an ExpressionSet
@@ -61,13 +70,14 @@ library("limma")
 plotMDS(eset, labels = phenoData(eset)$Status, main = "Samples relationships")
 ```
 
-We can see that they are clearly separated in two groups, but some samples like the Alcohol Hepatitis samples are on both sites of the first dimension. We can also observe that the cirrhosis compensated samples are closer to the normal or healthy samples than to the explants. 
+We can see that they are clearly separated in two groups, but some samples like the Alcohol Hepatitis samples are on both sites of the first dimension. We can also observe that the cirrhosis compensated samples are closer to the normal or healthy samples.  
 
 ## Design 
 
 The design we will use to find the differentially expressed genes is the following:
 ```{r design}
-names <- make.names(levels(phenoData(eset)$Status)) # To ensure sintactically valid names
+# To ensure sintactically valid names
+names <- make.names(levels(droplevels(phenoData(eset)$Status))) 
 design <- sapply(names, function(x){
   x <- ifelse(x == "Non.responders", "Non-responders", x)
   ifelse(phenoData(eset)$Status == x, 1, 0)
@@ -76,10 +86,35 @@ rownames(design) <- rownames(phenoData(eset))
 design
 ```
 
-As you can see each group has its own colum to increase the power to the model, and to allow for more informative contrasts
+As you can see each group has its own colum to increase the power to the model, and to allow for more informative contrasts.
+```{r design2}
+refact <- function(x){
+  if (x == "Normal") {
+    0
+  } else if ( x == "ASH") {
+    1
+  } else if (x == "C.Comp") {
+    2
+  } else if (x == "AH") {
+    4
+  } else if (x == "Responders") {
+    5
+  } else if (x == "Non-responders") {
+    6
+  } else {
+    stop("Unexpected level")
+  }
+}
+design2 <- sapply(as.character(phenoData(eset)$Status), refact)
+design2 <- as.matrix(design2)
+colnames(design2) <- "Progression"
+rownames(design2) <- rownames(phenoData(eset))
+```
+
 
 ```{r fitting}
 fit <- lmFit(exprs(eset), design)
+fit.2 <- lmFit(exprs(eset), design2)
 ```
 
 ## Contrasts
@@ -87,39 +122,72 @@ fit <- lmFit(exprs(eset), design)
 We are interested in several contrasts:
 ```{r contrasts}
 contrasts <- makeContrasts("ASHvsNormal" = ASH - Normal,
-                          "NASHvsNormal" = NASH - Normal,
                           "CirrhosisVsNormal" = C.Comp - Normal,
-                          "HCVvsNormal" = HCV - Normal,
                           "AHvsNormal" = AH - Normal,
                           "RespondersVsNormal" = Responders - Normal,
                           "Non-respondersVsNormal" = Non.responders - Normal,
-                          "ExplantsVsNormal" = Explants - Normal,
+                          
                           # Assuming that some status are similar
-                          "FibrosisVsNormal" = (ASH + NASH)/2 - Normal,
-                          "HepatitisVsNormal" = (HCV + AH)/2 - Normal,
                           "SevereVsNormal" = (Responders + Non.responders)/2 - Normal,
                           
-                          "ASHvsNASH" = ASH - NASH,
-                          "AHvsASH" = AH - ASH,
-                          "AHvsHCV" = AH - HCV,
-                          
                           "RespondersVsNon-responders" = Responders - Non.responders,
+                          
+                          "CirrhosisVsASH" = C.Comp - ASH,
+                          "AHvsCirrhosis" = AH - C.Comp,
+
                           "Non-respondersVsAH" = Non.responders - AH,
                           "RespondersVsAH" = Responders - AH,
-                          
-                          "ExplantsVsResponders" = Explants - Responders,
-                          "ExplantsVsNon-responders" = Explants - Non.responders,
+                          "SevereVsHepatitis" = (Non.responders + Responders)/2 - AH,
                           
                           levels = design)
 contrasts
 ```
 
+Given those comparisons of interest we now evaluate the results:
 
 ```{r contrast_fit}
 fit2 <- contrasts.fit(fit, contrasts)
-results <- decideTests(fit2)
+fit2 <- eBayes(fit2, proportion = 0.1)
+results <- decideTests(fit2, adjust.method = "fdr", lfc = log2(2))
 summary(results)
+
+fit2.2 <- eBayes(fit.2, proportion = 0.95)
+results2 <- decideTests(fit2.2)
+summary(results2)
 ```
 
+We can observe the quality of the t values over the teoretical 
+```{r qualtiy}
+out <- sapply(colnames(results), function(x){
+  qqt(fit2$t[, x], df = fit2$df.total, main = paste("Student's t Q-Q Plot of", x))
+  abline(0, 1)
+})
 
+out <- sapply(colnames(results2), function(x){
+  qqt(fit2.2$t[, x], df = fit2.2$df.total, main = paste("Student's t Q-Q Plot of", x))
+  abline(0, 1)
+})
+```
+Here we can see on the last plot that the exprsesion of the genes show a bimodal distribution. Which seems to confirm that at one point it descompensates and 
+
+# Ductular Reaction
+## Load the data of ductular reaction
+
+```{r load_dr}
+pheno <- read.csv("../data/ductular_reaction/samples_def.csv", col.names = 1)
+expr <- read.csv("../data/ductular_reaction/POS_NEG_TOTAL_16SAMPLES.csv", col.names = 1)
+```
+We explore these data:
+
+```{r exploration2}
+summary(pheno)
+pheno
+expr[1:5, 1:5]
+```
+We can observe the expression has also the symbols of the genes but its main identifier is the RefSeq identifier of NCBI.
+
+## SessionInfo
+```{r end}
+sessionInfo()
+```
 
