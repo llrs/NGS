@@ -1,5 +1,5 @@
 ---
-title: "Alcohol Hepatitis"
+title: "The weight of the ductular reaction in alcohol liver disease"
 author: "[Lluís Revilla](mailto:lrevilla@clinic.cat)"
 date: "`r Sys.Date()`"
 output: 
@@ -7,16 +7,13 @@ output:
     toc: true
   BiocStyle::pdf_document:
     toc: true
-vignette: >
-  % \VignetteEngine{knitr::rmarkdown}
-  % \usepackage[utf8]{inputenc}
 ---
 
 ```{r style, echo=FALSE, results="asis", message=FALSE}
-BiocStyle::markdown()
 knitr::opts_chunk$set(tidy = FALSE, echo = TRUE, cache = TRUE, autodep = TRUE)
 ```
-# Alcohol disease
+
+# Alcohol liver disease
 ## Load disease expression
 
 The data is provided already corrected and log2 transformed in a Excel file. Which I manually converted to csv for a faster reading in R. Also the second sheet of that Excel file had the phenoData used which I stored on a second csv file.
@@ -57,9 +54,9 @@ To work easier with the data I proceed to create an ExpressionSet
 ```{r ESet, message=FALSE}
 library("Biobase")
 library("AnnotationDbi")
-eset <- ExpressionSet(as.matrix(expression))
-phenoData(eset) <- AnnotatedDataFrame(phenoData)
-eset
+ALD <- ExpressionSet(as.matrix(expression))
+phenoData(ALD) <- AnnotatedDataFrame(phenoData)
+ALD
 ```
 
 ## Check the normalizations applied 
@@ -67,7 +64,7 @@ We take advantatge of the plotMDS function of limma package to plot the MDS of t
 
 ```{r plotMDS, message=FALSE}
 library("limma")
-plotMDS(eset, labels = phenoData(eset)$Status, main = "Samples relationships")
+plotMDS(ALD, labels = phenoData(ALD)$Status, main = "Samples relationships")
 ```
 
 We can see that they are clearly separated in two groups, but some samples like the Alcohol Hepatitis samples are on both sites of the first dimension. We can also observe that the cirrhosis compensated samples are closer to the normal or healthy samples.  
@@ -77,12 +74,12 @@ We can see that they are clearly separated in two groups, but some samples like 
 The design we will use to find the differentially expressed genes is the following:
 ```{r design}
 # To ensure sintactically valid names
-names <- make.names(levels(droplevels(phenoData(eset)$Status))) 
+names <- make.names(levels(droplevels(phenoData(ALD)$Status))) 
 design <- sapply(names, function(x){
   x <- ifelse(x == "Non.responders", "Non-responders", x)
-  ifelse(phenoData(eset)$Status == x, 1, 0)
+  ifelse(phenoData(ALD)$Status == x, 1, 0)
 })
-rownames(design) <- rownames(phenoData(eset))
+rownames(design) <- rownames(phenoData(ALD))
 design
 ```
 
@@ -105,21 +102,21 @@ refact <- function(x){
     stop("Unexpected level")
   }
 }
-design2 <- sapply(as.character(phenoData(eset)$Status), refact)
+design2 <- sapply(as.character(phenoData(ALD)$Status), refact)
 design2 <- as.matrix(design2)
 colnames(design2) <- "Progression"
-rownames(design2) <- rownames(phenoData(eset))
+rownames(design2) <- rownames(phenoData(ALD))
 ```
-
+We fit each design with the expression of the alcoholic liver disease:
 
 ```{r fitting}
-fit <- lmFit(exprs(eset), design)
-fit.2 <- lmFit(exprs(eset), design2)
+fit <- lmFit(exprs(ALD), design)
+fit.2 <- lmFit(exprs(ALD), design2)
 ```
 
 ## Contrasts
 
-We are interested in several contrasts:
+We are interested in several comparisons, in the first design:
 ```{r contrasts}
 contrasts <- makeContrasts("ASHvsNormal" = ASH - Normal,
                           "CirrhosisVsNormal" = C.Comp - Normal,
@@ -151,12 +148,12 @@ fit2 <- eBayes(fit2, proportion = 0.1)
 results <- decideTests(fit2, adjust.method = "fdr", lfc = log2(2))
 summary(results)
 
-fit2.2 <- eBayes(fit.2, proportion = 0.95)
+fit2.2 <- eBayes(fit.2, proportion = 0.95) 
 results2 <- decideTests(fit2.2)
 summary(results2)
 ```
 
-We can observe the quality of the t values over the teoretical 
+We can observe the quality of the t values over the teoretical quantiles to observe if there is any assumption about the eBayes fitting which doesn't holds. Note that I already modified the expected proportion of genes in the call to eBayes:
 ```{r qualtiy}
 out <- sapply(colnames(results), function(x){
   qqt(fit2$t[, x], df = fit2$df.total, main = paste("Student's t Q-Q Plot of", x))
@@ -168,14 +165,22 @@ out <- sapply(colnames(results2), function(x){
   abline(0, 1)
 })
 ```
-Here we can see on the last plot that the exprsesion of the genes show a bimodal distribution. Which seems to confirm that at one point it descompensates and 
+Here we can see on the last plot that the exprsesion of the genes show a bimodal distribution in the progression of the dissease. Which seems to confirm that at one point it descompensates and has a very bad prognossis. 
 
+## Store data
+It is a good idea to store the data, not only the program of your analysis, so here I go:
+```{r store_DR}
+save(fit, fit2, fit2.2, fit.2, design, design.2, ALD, contrasts, "ALD.RData")
+```
 # Ductular Reaction
+
+This data was extracted from a liver, the POS labels indicate that were extracted from a microdisection with KRT7 positive. NEG indicates that for the same microdisection those not stained for KRT7 where taken. TOTAL indicates that there is a mix of KRT7+ and KRT7- dyeing. Also this data has been already normalized.
+
 ## Load the data of ductular reaction
 
 ```{r load_dr}
-pheno <- read.csv("../data/ductular_reaction/samples_def.csv", col.names = 1)
-expr <- read.csv("../data/ductular_reaction/POS_NEG_TOTAL_16SAMPLES.csv", col.names = 1)
+pheno <- read.csv("../data/ductular_reaction/samples_def.csv", row.names = 1)
+expr <- read.csv("../data/ductular_reaction/POS_NEG_TOTAL_16SAMPLES.csv", row.names = 1)
 ```
 We explore these data:
 
@@ -185,8 +190,65 @@ pheno
 expr[1:5, 1:5]
 ```
 We can observe the expression has also the symbols of the genes but its main identifier is the RefSeq identifier of NCBI.
+I store in a separte object the symbols, and delete it from the expr object, and build the expression set:
+```{r symbols}
+orig_symbols <- expr$hgnc_symbol
+expr <- expr[, -1]
+DR <- ExpressionSet(as.matrix(expr))
+phenoData(DR) <- AnnotatedDataFrame(pheno)
+DR
+```
 
-## SessionInfo
+## Check normalizations
+We plot it too the MDS, to see where our samples go
+```{r MDS}
+plotMDS(DR, labels = phenoData(DR)$Fraction)
+```
+
+## Design
+In this case each type of expression has come from a different subset of the liver, so we should consider each one as an independent group. 
+```{r design3}
+design3 <- model.matrix(~0 + phenoData(DR)$Fraction)
+colnames(design3) <- substring(colnames(design3), 23)
+design3
+```
+We can fit our design to the expression data:
+```{r fitting2}
+fit3 <- lmFit(exprs(DR), design3)
+```
+
+## Contrasts
+We are interested in the Positive vs Negative comparison, but we can compute others too:
+```{r comp}
+contrasts2 <- makeContrasts("PosVsNegative" = POS - NEG,
+                            "PosVsTotal" = POS - TOTAL,
+                            "NegVsTotal" = NEG - TOTAL, levels = design3)
+contrasts2
+```
+
+```{r contrast_fit2}
+fit4 <- contrasts.fit(fit3, contrasts2)
+fit4 <- eBayes(fit4, proportion = 0.18)
+results.DR <- decideTests(fit4, adjust.method = "fdr", lfc = log2(2))
+summary(results.DR)
+```
+
+We can observe the quality of the t values over the teoretical quantiles to observe if there is any assumption about the eBayes fitting which doesn't holds. Note that I already modified the expected proportion of genes in the call to eBayes:
+```{r qualtiy2}
+out <- sapply(colnames(results.DR), function(x){
+  qqt(fit4$t[, x], df = fit4$df.total, main = paste("Student's t Q-Q Plot of", x))
+  abline(0, 1)
+})
+```
+
+## Store the data
+
+```{r store_DR}
+save(fit3, fit4, design3, DR, contrasts2, "DR.RData")
+```
+
+# SessionInfo
+
 ```{r end}
 sessionInfo()
 ```
