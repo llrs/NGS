@@ -155,15 +155,22 @@ summary(results2)
 ```
 
 We can observe the quality of the t values over the teoretical quantiles to observe if there is any assumption about the eBayes fitting which doesn't holds. Note that I already modified the expected proportion of genes in the call to eBayes:
-```{r qualtiy}
+```{r qualtiy, fig.height = 84, fig.width = 30}
+par(mfrow = c(ncol(results), 3))
 out <- sapply(colnames(results), function(x){
   qqt(fit2$t[, x], df = fit2$df.total, main = paste("Student's t Q-Q Plot of", x))
   abline(0, 1)
+  volcanoplot(fit2, coef = x, main = x)
+  plotMD(fit2, coef = x, main = x)
 })
-
+```
+```{r quality1, fig.width = 30}
+par(mfrow = c(ncol(results2), 3))
 out <- sapply(colnames(results2), function(x){
   qqt(fit2.2$t[, x], df = fit2.2$df.total, main = paste("Student's t Q-Q Plot of", x))
   abline(0, 1)
+  volcanoplot(fit2.2, coef = x, main = paste(x))
+  plotMD(fit2.2, coef = x, main = x)
 })
 ```
 Here we can see on the last plot that the exprsesion of the genes show a bimodal distribution in the progression of the dissease. Which seems to confirm that at one point it descompensates and has a very bad prognossis. 
@@ -176,9 +183,9 @@ save(fit, fit2, fit2.2, fit.2, design, design2, ALD, contrasts, file = "ALD.RDat
 
 ## Differentially expressed genes
 
-
-```{r DEG_ALD}
-par(mfrow = c(12, 2))
+We can plot the top 2000 genes with the highest absolute value of log fold-change in each :
+```{r DEG_ALD, fig.width = 30, fig.height = 84}
+par(mfrow = c(ncol(results), 2))
 out <- sapply(colnames(results), function(x) {
   tt.ALD <- topTable(fit2, coef = x, sort.by = "logFC", number = Inf)
   tt.ALD <- tt.ALD[order(-abs(tt.ALD$logFC)), ]
@@ -187,6 +194,9 @@ out <- sapply(colnames(results), function(x) {
   hist(tt.ALD[1:2000, "logFC"], 
        main = paste("Distribution of the top 2000 DEG in", x))
 })
+```
+For the progression model we can plot it too:
+```{r DEG_ALD2, fig.width = 30, fig.height = 30}
 par(mfrow = c(1, 2))
 tt.ALD2 <- topTable(fit2.2, coef = "Progression", sort.by = "logFC", number = Inf)
 tt.ALD2 <- tt.ALD2[order(-abs(tt.ALD2$logFC)), ]
@@ -256,11 +266,15 @@ summary(results.DR)
 ```
 
 We can observe the quality of the t values over the teoretical quantiles to observe if there is any assumption about the eBayes fitting which doesn't holds. Note that I already modified the expected proportion of genes in the call to eBayes:
-```{r qualtiy2}
+```{r qualtiy2, fig.width = 30, fig.height = 30}
+par(mfrow = c(3, 3))
 out <- sapply(colnames(results.DR), function(x){
   qqt(fit4$t[, x], df = fit4$df.total, main = paste("Student's t Q-Q Plot of", x))
   abline(0, 1)
+  volcanoplot(fit4, coef = x, main = x)
+  plotMD(fit4, coef = x, main = x)
 })
+
 ```
 
 ## Store the data
@@ -270,10 +284,10 @@ save(fit3, fit4, design3, DR, contrasts2,  file = "DR.RData")
 ```
 
 ## Differentially expressed genes
-```{r DEG_RD}
+```{r DEG_RD, fig.width = 14, fig.height = 30}
 tt.DR <- topTable(fit4, coef = "PosVsNegative", sort.by = "logFC", number = Inf)
 tt.DR <- tt.DR[order(-abs(tt.DR$logFC)), ] # Ordered by the absolute value of logFC
-par(mfrow=c(1, 2))
+par(mfrow = c(2, 1))
 plot(density(tt.DR[1:2000, "logFC"]), main = "Distribution of the top 2000 DEG")
 hist(tt.DR[1:2000, "logFC"], main = "Distribution of the top 2000 DEG")
 ```
