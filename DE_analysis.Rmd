@@ -98,7 +98,7 @@ refact <- function(x){
   } else if (x == "Responders") {
     5
   } else if (x == "Non-responders") {
-    6
+    5
   } else {
     stop("Unexpected level")
   }
@@ -107,6 +107,7 @@ design2 <- sapply(as.character(phenoData(ALD)$Status), refact)
 design2 <- as.matrix(design2)
 colnames(design2) <- "Progression"
 rownames(design2) <- rownames(phenoData(ALD))
+design2
 ```
 We fit each design with the expression of the alcoholic liver disease:
 
@@ -164,7 +165,7 @@ out <- sapply(colnames(results), function(x){
   plotMD(fit2, coef = x, main = x)
 })
 ```
-```{r quality1, fig.width = 30}
+```{r quality1, fig.width = 30, fig.height = 20}
 par(mfrow = c(ncol(results2), 3))
 out <- sapply(colnames(results2), function(x){
   qqt(fit2.2$t[, x], df = fit2.2$df.total, main = paste("Student's t Q-Q Plot of", x))
