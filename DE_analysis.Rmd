@@ -16,24 +16,24 @@ knitr::opts_chunk$set(tidy = FALSE, echo = TRUE, cache = FALSE, autodep = TRUE)
 # Alcohol liver disease
 ## Load disease expression
 
-The data is provided already corrected and log2 transformed in a Excel file. Which I manually converted to csv for a faster reading in R. Also the second sheet of that Excel file had the phenoData used which I stored on a second csv file.
+The expression data is provided as counts in a tab separate value format. In another file there is the phenoData associated to the samples.
 
 ```{r load}
-expression <- read.csv("../data/ALD_ramon/NGS_AHsteps.expr.csv", row.names = 1)
+count <- read.delim("../data/ALD_ramon/NGS_AHsteps.expr.counts.tsv", 
+                    row.names = 1)
 phenoData <- read.csv("../data/ALD_ramon/NGS_AHsteps.design.csv", row.names = 1)
 ```
 
 First we will explore a little bit the data, in case we need to correct something:
 
-```{r exploration1}
+```{r exploration1, message = FALSE}
 library("geneplotter")
 summary(phenoData)
 phenoData
-expression[1:5, 1:5]
+count[1:5, 1:5]
 ```
 
-So we will delete two colums that has the same information as the column G. And we will use more easily readable names
-
+So we will delete two colums that has the same information as the column G. And we will use more easily readable names:
 ```{r pheno}
 phenoData <- phenoData[, c("Sample.id", "G")]
 colnames(phenoData) <- c("Sample", "Status")
@@ -41,7 +41,28 @@ levels(phenoData$Status) <- c("AH", "Non-responders", "Responders", "C.Comp",
                               "ASH", "Explants", "HCV", "NASH", "Normal")
 phenoData
 ```
-## Check quality
+However we are only interested on those related to alcohol disease, so we need to subset them:
+```{r sub}
+alcohol <- !phenoData$Status %in% c("HCV", "NASH", "Explants")
+phenoData <- phenoData[alcohol, ]
+count <- count[, colnames(count) %in% rownames(phenoData)]
+```
+
+We can calculate the normalization factors used to calculate the Counts per million read: 
+```{r calcNormFactors}
+library("edgeR")
+dge <- DGEList(counts = count, group = phenoData$Status)
+ord <- order(dge$sample$lib.size)
+barplot(dge$sample$lib.size[ord]/1e6, las = 1, ylab = "Millions of reads",
+        xlab = "Samples")
+dge <- calcNormFactors(dge)
+```
+We can normalize the data to counts per millon of reads taking into account that we know the normalized library size:
+```{r cpm}
+expression <- cpm(dge, normalized.lib.sizes = TRUE, log = TRUE, prior.count = 3)
+```
+
+## Check quality pre-normalizations
 We can observe the quality of the samples with a boxplot and the density of expressions:
 ```{r q_check}
 boxplot(expression, main = "Expression per sample")
@@ -50,18 +71,18 @@ avgexp <- rowMeans(expression)
 hist(avgexp, main = "Histogram of mean expression per gene")
 abline(v = 1, col = "red", lwd = 2)
 ```
-There is a lot of differences between samples on the low expressed genes. We should filter those genes that are below 1, as they are unreliable.
+There is a lot of differences between samples on the low expressed genes. We filter those genes that are below 1, as they are unreliable:
+
 ```{r remove}
 expression <- expression[avgexp > 1, ]
 multidensity(expression, main = "Densities of expression", legend = NULL)
 ```
 Now the distribution of the expression between samples is much more comparable. 
-As we need only the alcohol samples we remove those who aren't from alcohol:
+Following the recomendation of the edgeR package we recalculate the normalization factor without the lowly expressed genes:
 
-```{r alcohol}
-alcohol <- !phenoData$Status %in% c("HCV", "NASH", "Explants")
-expression <- expression[, alcohol]
-phenoData <- phenoData[alcohol, ]
+```{r recalc}
+dge <- calcNormFactors(dge[avgexp > 1, ])
+expression <- cpm(dge, normalized.lib.sizes = TRUE, log = TRUE, prior.count = 3)
 ```
 
 To work easier with the data I proceed to create an ExpressionSet
@@ -100,7 +121,7 @@ design
 
 As you can see each group has its own colum to increase the power to the model, and to allow for more informative contrasts.
 ```{r design2}
-refact <- function(x){
+refact <- function(x) {
   if (x == "Normal") {
     0
   } else if ( x == "ASH") {
@@ -123,11 +144,33 @@ colnames(design2) <- "Progression"
 rownames(design2) <- rownames(phenoData(ALD))
 design2
 ```
+
+Normalize the expression by calculating an appropriate observation weight.
+```{r voom}
+v <- voom(dge, design, plot = TRUE, normalize.method = "cyclicloess")
+```
+Note that even if we filter those with low expression we assign the correct library size, to avoid over estimation.
+
+## Estimate surrogate variables
+We can further estimate surrogate variables with the package sva:
+```{r sva, message = FALSE}
+library("sva")
+design0 <- model.matrix(~1, data = pData(ALD))
+sv <- sva(v$E, design)
+sv2 <- sva(v$E, design2)
+```
+We can append the estimated surrogated variables to the design matrix for a better estimation of the effect of each paramter:
+
+```{r cbind_design}
+i.design <- cbind(design, sv$sv)
+i.design2 <- cbind(design2, sv$sv)
+```
+
 We fit each design with the expression of the alcoholic liver disease:
 
 ```{r fitting}
-fit <- lmFit(exprs(ALD), design)
-fit.2 <- lmFit(exprs(ALD), design2)
+fit <- lmFit(v$E, i.design)
+fit.2 <- lmFit(v$E, i.design2)
 ```
 
 ## Contrasts
@@ -169,8 +212,8 @@ results2 <- decideTests(fit2.2)
 summary(results2)
 ```
 
-We can observe the quality of the t values over the teoretical quantiles to observe if there is any assumption about the eBayes fitting which doesn't holds. Note that I already modified the expected proportion of genes in the call to eBayes:
-```{r qualtiy, fig.height = 84, fig.width = 30 }
+We can observe the quality of the t-values over the teoretical quantiles to observe if there is any assumption about the eBayes fitting which doesn't holds. Note that I already modified the expected proportion of genes in the call to eBayes:
+```{r qualtiy, fig.height = 100, fig.width = 30 }
 par(mfrow = c(ncol(results), 3))
 out <- sapply(colnames(results), function(x){
   qqt(fit2$t[, x], df = fit2$df.total, main = paste("Student's t Q-Q Plot of", x))
@@ -179,7 +222,7 @@ out <- sapply(colnames(results), function(x){
   plotMD(fit2, coef = x, main = x)
 })
 ```
-```{r quality1, fig.width = 30, fig.height = 20 }
+```{r quality1, fig.width = 20, fig.height = 20 }
 par(mfrow = c(ncol(results2), 3))
 out <- sapply(colnames(results2), function(x){
   qqt(fit2.2$t[, x], df = fit2.2$df.total, main = paste("Student's t Q-Q Plot of", x))
@@ -193,7 +236,7 @@ Here we can see on the last plot that the exprsesion of the genes show a bimodal
 ## Store data
 It is a good idea to store the data, not only the program of your analysis, so here I go:
 ```{r store_ALD}
-save(fit, fit2, fit2.2, fit.2, design, design2, ALD, contrasts, file = "ALD.RData")
+save(fit, fit2, fit2.2, fit.2, design, design2, i.design, i.design2, dge, ALD, contrasts, file = "ALD.RData")
 ```
 
 ## Differentially expressed genes
