@@ -10,8 +10,8 @@ output:
 ---
 
 ```{r setup, echo=FALSE, results="asis", message=FALSE}
-BiocStyle::markdown()
 knitr::opts_chunk$set(tidy = FALSE, echo = TRUE, cache = TRUE, autodep = TRUE)
+
 ```
 
 # Alcohol liver disease
@@ -30,6 +30,7 @@ First we will explore a little bit the data, in case we need to correct somethin
 summary(phenoData)
 phenoData
 expression[1:5, 1:5]
+boxplot(expression, main = "Expression per sample")
 ```
 
 So we will delete two colums that has the same information as the column G. And we will use more easily readable names
@@ -63,7 +64,7 @@ ALD
 ## Check the normalizations applied 
 We take advantatge of the plotMDS function of limma package to plot the MDS of the samples, to see how close are between them. 
 
-```{r plotMDS, message=FALSE}
+```{r plotMDS, message=FALSE }
 library("limma")
 plotMDS(ALD, labels = phenoData(ALD)$Status, main = "Samples relationships")
 ```
@@ -156,7 +157,7 @@ summary(results2)
 ```
 
 We can observe the quality of the t values over the teoretical quantiles to observe if there is any assumption about the eBayes fitting which doesn't holds. Note that I already modified the expected proportion of genes in the call to eBayes:
-```{r qualtiy, fig.height = 84, fig.width = 30}
+```{r qualtiy, fig.height = 84, fig.width = 30 }
 par(mfrow = c(ncol(results), 3))
 out <- sapply(colnames(results), function(x){
   qqt(fit2$t[, x], df = fit2$df.total, main = paste("Student's t Q-Q Plot of", x))
@@ -165,7 +166,7 @@ out <- sapply(colnames(results), function(x){
   plotMD(fit2, coef = x, main = x)
 })
 ```
-```{r quality1, fig.width = 30, fig.height = 20}
+```{r quality1, fig.width = 30, fig.height = 20 }
 par(mfrow = c(ncol(results2), 3))
 out <- sapply(colnames(results2), function(x){
   qqt(fit2.2$t[, x], df = fit2.2$df.total, main = paste("Student's t Q-Q Plot of", x))
@@ -185,7 +186,7 @@ save(fit, fit2, fit2.2, fit.2, design, design2, ALD, contrasts, file = "ALD.RDat
 ## Differentially expressed genes
 
 We can plot the top 2000 genes with the highest absolute value of log fold-change in each :
-```{r DEG_ALD, fig.width = 30, fig.height = 84}
+```{r DEG_ALD, fig.width = 30, fig.height = 84 }
 par(mfrow = c(ncol(results), 2))
 out <- sapply(colnames(results), function(x) {
   tt.ALD <- topTable(fit2, coef = x, sort.by = "logFC", number = Inf)
@@ -197,7 +198,7 @@ out <- sapply(colnames(results), function(x) {
 })
 ```
 For the progression model we can plot it too:
-```{r DEG_ALD2, fig.width = 30, fig.height = 30}
+```{r DEG_ALD2, fig.width = 30, fig.height = 30 }
 par(mfrow = c(1, 2))
 tt.ALD2 <- topTable(fit2.2, coef = "Progression", sort.by = "logFC", number = Inf)
 tt.ALD2 <- tt.ALD2[order(-abs(tt.ALD2$logFC)), ]
@@ -227,6 +228,7 @@ I store in a separte object the symbols, and delete it from the expr object, and
 ```{r symbols}
 orig_symbols <- expr$hgnc_symbol
 expr <- expr[, -1]
+boxplot(expr, main = "Expression per sample")
 DR <- ExpressionSet(as.matrix(expr))
 phenoData(DR) <- AnnotatedDataFrame(pheno)
 DR
@@ -234,7 +236,7 @@ DR
 
 ## Check normalizations
 We plot it too the MDS, to see where our samples go
-```{r MDS}
+```{r MDS }
 plotMDS(DR, labels = phenoData(DR)$Fraction)
 ```
 
@@ -267,7 +269,7 @@ summary(results.DR)
 ```
 
 We can observe the quality of the t values over the teoretical quantiles to observe if there is any assumption about the eBayes fitting which doesn't holds. Note that I already modified the expected proportion of genes in the call to eBayes:
-```{r qualtiy2, fig.width = 30, fig.height = 30}
+```{r qualtiy2, fig.width = 30, fig.height = 30 }
 par(mfrow = c(3, 3))
 out <- sapply(colnames(results.DR), function(x){
   qqt(fit4$t[, x], df = fit4$df.total, main = paste("Student's t Q-Q Plot of", x))
@@ -285,7 +287,7 @@ save(fit3, fit4, design3, DR, contrasts2,  file = "DR.RData")
 ```
 
 ## Differentially expressed genes
-```{r DEG_RD, fig.width = 14, fig.height = 30}
+```{r DEG_RD, fig.width = 14, fig.height = 30 }
 tt.DR <- topTable(fit4, coef = "PosVsNegative", sort.by = "logFC", number = Inf)
 tt.DR <- tt.DR[order(-abs(tt.DR$logFC)), ] # Ordered by the absolute value of logFC
 par(mfrow = c(2, 1))
