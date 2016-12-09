@@ -9,10 +9,11 @@ output:
     toc: true
 ---
 
-```{r setup, echo=FALSE, results = "asis", message = FALSE}
+```{r Setup, echo=FALSE, results = "asis", message = FALSE}
+BiocStyle::markdown()
 knitr::opts_chunk$set(tidy = FALSE, echo = TRUE, cache = TRUE, autodep = TRUE)
 ```
-
+This is part of a bigger study you can find [here](index.html)
 # Alcohol liver disease
 ## Load disease expression
 
@@ -285,44 +286,37 @@ over <- sum(signif[1:2000, "logFC"] > 0)
 These are the genes relevant of the alocholic liver disease progression. There are thus `r over` genes overexpressed in alcoholic liver disease and `r 2000 - over` downregulated in the alcoholic liver disease, which are the main contributers to the disease progression.
 
 We can also see which genes are differentially expressed in each phase, and which are shared:
-```{r venn, fig.width = 30, fig.height = 15}
-vennDiagram(results[, c(1:3, 6)], cex = c(1, 1, 0.7), 
+```{r venn, fig.width = 30, fig.height = 15, collapse = TRUE}
+vennDiagram(results[, c(1:3, 6)], include = "up",
             circle.col = c("red", "green", "black", "blue"), 
-            main = "Genes shared in the progression of the disease")
+            main = "Genes Up-regulated in the disease")
+vennDiagram(results[, c(1:3, 6)], include = "down",
+            circle.col = c("red", "green", "black", "blue"), 
+            main = "Genes Down-regulated in the disease")
 ```
 We can see that there are 299 genes which are differencially expressed significantly with an adjusted p-value below 0.05.
 
 But we can plot it sepparatedly for each step, for a better comparison:
-```{r venn2, fig.width = 30, fig.height = 30}
-par(mfrow = c(3, 3))
-vennDiagram(results[, c(1, 2)],  cex = c(1, 1, 0.7), 
-            circle.col = c("red", "green", "black", "blue"), 
-            main = "DEG shared in the progression of the disease")
-vennDiagram(results[, c(1, 2)],  cex = c(1, 1, 0.7), include = "up", 
-            circle.col = c("red", "green", "black", "blue"), 
+```{r venn2, fig.width = 30, fig.height = 30, collapse = TRUE}
+vennDiagram(results[, c(1, 2)], include = "up", 
+            circle.col = c("green", "black"), 
             main = "Genes Up-regulated shared")
-vennDiagram(results[, c(1, 2)],  cex = c(1, 1, 0.7), include = "down", 
-            circle.col = c("red", "green", "black", "blue"), 
+vennDiagram(results[, c(1, 2)], include = "down", 
+            circle.col = c("green", "black"), 
             main = "Genes Down-regulated")
 
-vennDiagram(results[, c(2, 3)],  cex = c(1, 1, 0.7), 
-            circle.col = c("red", "green", "black", "blue"), 
-            main = "DEG shared in the progression of the disease")
-vennDiagram(results[, c(2, 3)],  cex = c(1, 1, 0.7), include = "up", 
-            circle.col = c("red", "green", "black", "blue"), 
+vennDiagram(results[, c(2, 3)], include = "up", 
+            circle.col = c("green", "black"), 
             main = "Genes Up-regulated shared")
-vennDiagram(results[, c(2, 3)],  cex = c(1, 1, 0.7), include = "down", 
-            circle.col = c("red", "green", "black", "blue"), 
+vennDiagram(results[, c(2, 3)], include = "down", 
+            circle.col = c("green", "black"), 
             main = "Genes Down-regulated")
 
-vennDiagram(results[, c(3, 6)],  cex = c(1, 1, 0.7), 
-            circle.col = c("red", "green", "black", "blue"), 
-            main = "DEG shared in the progression of the disease")
-vennDiagram(results[, c(3, 6)],  cex = c(1, 1, 0.7), include = "up", 
-            circle.col = c("red", "green", "black", "blue"), 
+vennDiagram(results[, c(3, 6)], include = "up", 
+            circle.col = c("green", "black"), 
             main = "Genes Up-regulated shared")
-vennDiagram(results[, c(3, 6)],  cex = c(1, 1, 0.7), include = "down", 
-            circle.col = c("red", "green", "black", "blue"), 
+vennDiagram(results[, c(3, 6)], include = "down", 
+            circle.col = c("green", "black"), 
             main = "Genes Down-regulated")
 ```
 
