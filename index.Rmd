@@ -1,0 +1,27 @@
+---
+title: "The weight of the ductular reaction in alcohol liver disease"
+author: "[Lluís Revilla](mailto:lrevilla@clinic.cat)"
+date: "`r Sys.Date()`"
+output:
+  BiocStyle::html_document:
+    toc: true
+  BiocStyle::pdf_document:
+    toc: true
+---
+
+```{r setup, echo=FALSE, results="asis", message=FALSE}
+knitr::opts_chunk$set(tidy = FALSE, echo = TRUE, cache = FALSE, autodep = TRUE)
+```
+
+You can see the analysis of data in this folder:
+
+ - [Ductular reaction](Ductular_reaction.html)
+ - [Alcoholic disease](Alcoholic_disease.html)
+
+
+# SessionInfo
+
+```{r end}
+sessionInfo()
+```
+

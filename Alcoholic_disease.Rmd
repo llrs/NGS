@@ -1,5 +1,5 @@
 ---
-title: "The weight of the ductular reaction in alcohol liver disease"
+title: "Alcoholic disease"
 author: "[Lluís Revilla](mailto:lrevilla@clinic.cat)"
 date: "`r Sys.Date()`"
 output:
@@ -9,8 +9,8 @@ output:
     toc: true
 ---
 
-```{r setup, echo=FALSE, results="asis", message=FALSE}
-knitr::opts_chunk$set(tidy = FALSE, echo = TRUE, cache = FALSE, autodep = TRUE)
+```{r setup, echo=FALSE, results = "asis", message = FALSE}
+knitr::opts_chunk$set(tidy = FALSE, echo = TRUE, cache = TRUE, autodep = TRUE)
 ```
 
 # Alcohol liver disease
@@ -262,115 +262,8 @@ plot(density(tt.ALD2[1:2000, "logFC"]), main = "Distribution of the top 2000 DEG
 hist(tt.ALD2[1:2000, "logFC"], main = "Distribution of the top 2000 DEG")
 ```
 
-# Ductular Reaction
-
-This data was extracted from a liver, the POS labels indicate that were extracted from a microdisection with KRT7 positive. NEG indicates that for the same microdisection those not stained for KRT7 where taken. TOTAL indicates that there is a mix of KRT7+ and KRT7- dyeing. Also this data has been already normalized.
-
-## Load the data of ductular reaction
-
-```{r load_dr}
-pheno <- read.csv("../data/ductular_reaction/samples_def.csv", row.names = 1)
-expr <- read.csv("../data/ductular_reaction/POS_NEG_TOTAL_16SAMPLES.csv", row.names = 1)
-```
-We explore these data:
-
-```{r exploration2}
-summary(pheno)
-pheno
-expr[1:5, 1:5]
-```
-We can observe the expression has also the symbols of the genes but its main identifier is the RefSeq identifier of NCBI. 
-I store in a separte object the symbols, and delete it from the expr object, and build the expression set:
-```{r symbols}
-orig_symbols <- expr$hgnc_symbol
-expr <- expr[, -1]
-```
-## Check quality
-We can observe the quality of each sample with:
-```{r quality_check}
-boxplot(expr, main = "Expression per sample")
-multidensity(expr, main = "Densities of expression", legend = NULL)
-avgexp <- rowMeans(expr)
-hist(avgexp, main = "Histogram of mean expression per gene")
-abline(v = 1, col = "red", lwd = 2)
-```
-We can observe that the densities differ between samples on the low expression values. We should filter those genes that are below 1, as they are unreliable.  
-
-```{r remove2}
-expr <- expr[avgexp > 1, ]
-multidensity(expr, main = "Densities of expression", legend = NULL)
-```
-Now the distribution of the expression between samples is much more comparable. But it still has some perturbation at the peak of the the expression. Nevertheless, we create an Expression Set.
-```{r eset}
-DR <- ExpressionSet(as.matrix(expr))
-phenoData(DR) <- AnnotatedDataFrame(pheno)
-DR
-```
-
-## Check normalizations
-We plot it too the MDS, to see where our samples go
-```{r MDS }
-plotMDS(DR, labels = phenoData(DR)$Fraction)
-```
-
-## Design
-In this case each type of expression has come from a different subset of the liver, so we should consider each one as an independent group. 
-```{r design3}
-design3 <- model.matrix(~0 + phenoData(DR)$Fraction)
-colnames(design3) <- substring(colnames(design3), 23)
-design3
-```
-We can fit our design to the expression data:
-```{r fitting2}
-fit3 <- lmFit(exprs(DR), design3)
-```
-
-## Contrasts
-We are interested in the Positive vs Negative comparison, but we can compute others too:
-```{r comp}
-contrasts2 <- makeContrasts("PosVsNegative" = POS - NEG,
-                            "PosVsTotal" = POS - TOTAL,
-                            "NegVsTotal" = NEG - TOTAL, levels = design3)
-contrasts2
-```
-
-```{r contrast_fit2}
-fit4 <- contrasts.fit(fit3, contrasts2)
-fit4 <- eBayes(fit4, proportion = 0.18)
-results.DR <- decideTests(fit4, adjust.method = "fdr", lfc = log2(2))
-summary(results.DR)
-```
-
-We can observe the quality of the t values over the teoretical quantiles to observe if there is any assumption about the eBayes fitting which doesn't holds. Note that I already modified the expected proportion of genes in the call to eBayes:
-```{r qualtiy2, fig.width = 30, fig.height = 30 }
-par(mfrow = c(3, 3))
-out <- sapply(colnames(results.DR), function(x){
-  qqt(fit4$t[, x], df = fit4$df.total, main = paste("Student's t Q-Q Plot of", x))
-  abline(0, 1)
-  volcanoplot(fit4, coef = x, main = x)
-  plotMD(fit4, coef = x, main = x)
-})
-
-```
-
-## Store the data
-
-```{r store_DR}
-save(fit3, fit4, design3, DR, contrasts2,  file = "DR.RData")
-```
-
-## Differentially expressed genes
-```{r DEG_RD, fig.width = 14, fig.height = 30 }
-tt.DR <- topTable(fit4, coef = "PosVsNegative", sort.by = "logFC", number = Inf)
-tt.DR <- tt.DR[order(-abs(tt.DR$logFC)), ] # Ordered by the absolute value of logFC
-par(mfrow = c(2, 1))
-plot(density(tt.DR[1:2000, "logFC"]), main = "Distribution of the top 2000 DEG")
-hist(tt.DR[1:2000, "logFC"], main = "Distribution of the top 2000 DEG")
-```
-
 # SessionInfo
 
 ```{r end}
 sessionInfo()
 ```
-
