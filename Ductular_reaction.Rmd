@@ -19,13 +19,14 @@ This data was extracted from a liver, the POS labels indicate that were extracte
 
 ## Load the data of ductular reaction
 
-```{r load_dr}
+```{r load}
 pheno <- read.csv("../data/ductular_reaction/samples_def.csv", row.names = 1)
 expr <- read.csv("../data/ductular_reaction/POS_NEG_TOTAL_16SAMPLES.csv", row.names = 1)
 ```
 We explore these data:
 
-```{r exploration2}
+```{r exploration, message = FALSE}
+library("geneplotter")
 summary(pheno)
 pheno
 expr[1:5, 1:5]

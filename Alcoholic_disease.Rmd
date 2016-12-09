@@ -26,7 +26,7 @@ phenoData <- read.csv("../data/ALD_ramon/NGS_AHsteps.design.csv", row.names = 1)
 
 First we will explore a little bit the data, in case we need to correct something:
 
-```{r exploration1, message = FALSE}
+```{r exploration, message = FALSE}
 library("geneplotter")
 summary(phenoData)
 phenoData
