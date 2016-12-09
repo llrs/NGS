@@ -62,6 +62,7 @@ DR
 ## Check normalizations
 We plot it too the MDS, to see where our samples go
 ```{r MDS }
+library("limma")
 plotMDS(DR, labels = phenoData(DR)$Fraction)
 ```
 
