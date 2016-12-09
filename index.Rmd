@@ -10,14 +10,32 @@ output:
 ---
 
 ```{r setup, echo=FALSE, results="asis", message=FALSE}
-knitr::opts_chunk$set(tidy = FALSE, echo = TRUE, cache = FALSE, autodep = TRUE)
+knitr::opts_chunk$set(tidy = FALSE, echo = TRUE, cache = TRUE, autodep = TRUE)
 ```
+
+# Steps
+
+## Ductular reaction signature
+
+Obtain the ductular reaction signature the top 2000 genes differentially genes
+
+## Alcoholic liver disease signature
+
+Obtain the alcoholic liver disease signature of the progression of the disease the top 2000 differentially expressed genes.
+
+## Networks
+Use [WGCNA](https://labs.genetics.ucla.edu/horvath/CoexpressionNetwork/Rpackages/WGCNA/) to build the co-expressed genes of the alcoholic liver disease. And test the enrichment in the modules with genes differentially expressed genes of the ductular reaction.
+
+## BioCor
+
+Test if [BioCor](https://github.com/llrs/BioCor) works better finding, and grouping genes.
+
+# Analysis
 
 You can see the analysis of data in this folder:
 
  - [Ductular reaction](Ductular_reaction.html)
  - [Alcoholic disease](Alcoholic_disease.html)
-
 
 # SessionInfo
 

@@ -10,7 +10,7 @@ output:
 ---
 
 ```{r setup, echo=FALSE, results="asis", message=FALSE}
-knitr::opts_chunk$set(tidy = FALSE, echo = TRUE, cache = FALSE, autodep = TRUE)
+knitr::opts_chunk$set(tidy = FALSE, echo = TRUE, cache = TRUE, autodep = TRUE)
 ```
 
 # Ductular Reaction
