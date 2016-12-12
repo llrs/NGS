@@ -320,6 +320,54 @@ vennDiagram(results[, c(3, 6)], include = "down",
             main = "Genes Down-regulated")
 ```
 
+## Functional enrichment
+We can group genes by function using [geneSCF](http://genescf.kandurilab.org/), which is a program written in perl. As input it requires a list of genes with each line the name of the gene:
+
+```{r geneSCF}
+fileConn <- file("genes_list.txt")
+writeLines(rownames(signif), fileConn)
+close(fileConn)
+```
+We run the program with the following command, we asume that there are 20000 genes in humans, and we group them by pathway in REACTOME:
+```{bash geneSCF2, eval=FALSE, include=FALSE}
+./geneSCF -m=normal -i=genes_list.txt -t=sym -db=REACTOME -o=. -bg=20000 -org=Hs -p=yes
+```
+
+### topGO 
+We can also group them by GO:
+```{r topGO}
+library("topGO")
+allGenes <- tt.ALD2[, "adj.P.Val"]
+names(allGenes) <- rownames(tt.ALD2)
+topDiffGenes <- function(x) {
+  return(x <= 0.05)
+}
+GOdata.bp <- new("topGOdata",
+                 ontology = "BP",
+                 description = "Biological process of the signature module.",
+                 allGenes = allGenes,
+                 annot = annFUN.org,
+                 ID = "symbol",
+                 mapping = "org.Hs.eg",
+                 geneSel = topDiffGenes,
+                 nodeSize = 5)
+save(GOdata.bp, file = "GO_ALD.RData")
+resultFisher <- runTest(GOdata.bp, algorithm = "classic", statistic = "fisher")
+resultKS.weight <- runTest(GOdata.bp, algorithm = 'weight01', statistic = "ks")
+resultKS.elim <- runTest(GOdata.bp, algorithm = "elim", statistic = "ks")
+avgResult <- combineResults(resultFisher, resultKS.weight, resultKS.elim,
+                            method = "mean")
+
+allRes <- GenTable(GOdata.bp, classic = resultFisher, weight01 = resultKS.weight,
+                   elim = resultKS.elim, orderBy = "weight01", topNodes = 1000)
+allRes <- allRes[allRes$weight01 < 0.05, ]
+write.csv(allRes, file = "GO_ALD_progression.csv", row.names = FALSE)
+
+showSigOfNodes(GOdata.bp, score(resultKS.weight), firstSigNodes = 10, useInfo = 'all')
+title(main = "GO analysis using Weight01 algorithm")
+```
+In this plot we can observe the relationship between the top 10 significant gene ontologies, using the Weight01 algorithm.
+
 # SessionInfo
 Here are the packages and the versions used to analyse these data and build this page:
 ```{r end}
