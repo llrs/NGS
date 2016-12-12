@@ -94,7 +94,23 @@ We take advantatge of the plotMDS function of limma package to plot the MDS of t
 
 ```{r plotMDS, message=FALSE }
 plotMDS(DR, top = Inf, labels = phenoData(DR)$G, main = "Samples relationships")
+plotMDS(DR, top = Inf, labels = c(seq(1, 6), seq(1, 6), seq(3, 6)), main = "Samples relationships")
 ```
+
+We can visualize too, the relationship between samples at gene expression by:
+```{r cluster}
+colnames(logCPM) <- phenoData(DR)$G
+d <- as.dist(1 - cor(logCPM, method = "spearman"))
+cluster <- hclust(d)
+plot(cluster)
+
+colnames(logCPM) <- c(seq(1, 6), seq(1, 6), seq(3, 6))
+d <- as.dist(1 - cor(logCPM, method = "spearman"))
+cluster <- hclust(d)
+plot(cluster)
+colnames(logCPM) <- rownames(phenoData(DR))
+```
+We can see that some samples tend to be paired by the origin of their data.
 
 ## Design
 In this case each type of expression has come from a different subset of the liver, so we should consider each one as an independent group. 
