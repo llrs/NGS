@@ -14,14 +14,14 @@ BiocStyle::markdown()
 knitr::opts_chunk$set(tidy = FALSE, echo = TRUE, cache = TRUE, autodep = TRUE)
 ```
 This is part of a bigger study you can find [here](index.html)
+
 # Alcohol liver disease
 ## Load disease expression
 
 The expression data is provided as counts in a tab separate value format. In another file there is the phenoData associated to the samples.
 
 ```{r load}
-count <- read.delim("../data/ALD_ramon/NGS_AHsteps.expr.counts.tsv", 
-                    row.names = 1)
+count <- read.csv("../data/ALD_ramon/refseq_counts_ALD.csv", row.names = 1)
 phenoData <- read.csv("../data/ALD_ramon/NGS_AHsteps.design.csv", row.names = 1)
 ```
 
@@ -124,6 +124,7 @@ design <- sapply(names, function(x){
   ifelse(phenoData(ALD)$Status == x, 1, 0)
 })
 rownames(design) <- rownames(phenoData(ALD))
+design <- cbind("(Intercept)" = rep(1, nrow(design)), design)
 design
 ```
 
@@ -329,7 +330,7 @@ writeLines(rownames(signif), fileConn)
 close(fileConn)
 ```
 We run the program with the following command, we asume that there are 20000 genes in humans, and we group them by pathway in REACTOME:
-```{bash geneSCF2, eval=FALSE, include=FALSE}
+```{bash geneSCF2, eval = FALSE, include = TRUE}
 ./geneSCF -m=normal -i=genes_list.txt -t=sym -db=REACTOME -o=. -bg=20000 -org=Hs -p=yes
 ```
 
