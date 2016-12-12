@@ -50,7 +50,7 @@ logCPM <- cpm(dge, normalized.lib.sizes = TRUE, log = TRUE, prior.count = 3)
 ```
 ## Check quality pre-normalizations
 We can observe the quality of the samples with a boxplot and the density of expressions:
-```{r q_check, fig.width = 30}
+```{r q_check, fig.width = 30, fig.height = 10}
 boxplot(logCPM, main = "Expression per sample", col = phenoData$G)
 multidensity(logCPM, main = "Densities of expression", legend = NULL,  
              col = phenoData$G)
@@ -101,6 +101,9 @@ In this case each type of expression has come from a different subset of the liv
 ```{r design}
 design <- model.matrix(~0 + phenoData(DR)$G)
 colnames(design) <- c("NEG", "POS", "TOTAL")
+design <- cbind(design, "Patient" = c(seq(from = 1, to = 6, by = 1),
+                                      seq(from = 1, to = 6, by = 1),
+                                      3, 4, 5, 6))
 design
 ```
 
@@ -138,15 +141,15 @@ contrasts <- makeContrasts("PosVsNeg" = POS - NEG,
 contrasts
 ```
 
-```{r contrast_fit2}
+```{r contrast_fit}
 fit.2 <- contrasts.fit(fit, contrasts)
-fit.2 <- eBayes(fit.2, proportion = 0.1)
+fit.2 <- eBayes(fit.2)
 results.DR <- decideTests(fit.2, adjust.method = "fdr", lfc = log2(2))
 summary(results.DR)
 ```
 
 We can observe the quality of the t values over the teoretical quantiles to observe if there is any assumption about the eBayes fitting which doesn't holds. Note that I already modified the expected proportion of genes in the call to eBayes:
-```{r qualtiy2, fig.width = 30, fig.height = 30 }
+```{r qualtiy, fig.width = 30, fig.height = 30 }
 par(mfrow = c(3, 3))
 out <- sapply(colnames(results.DR), function(x){
   qqt(fit.2$t[, x], df = fit.2$df.total, main = paste("Student's t Q-Q Plot of", x))
@@ -154,13 +157,13 @@ out <- sapply(colnames(results.DR), function(x){
   volcanoplot(fit.2, coef = x, main = x)
   plotMD(fit.2, coef = x, main = x)
 })
-
 ```
 
 ## Store the data
 
+We store the data in case we need it:
 ```{r store_DR}
-save(fit, fit.2, design, DR, contrasts, file = "DR.RData")
+save(fit, fit.2, design, logCPM, DR, contrasts, file = "DR.RData")
 ```
 
 ## Differentially expressed genes
@@ -169,14 +172,14 @@ tt.DR <- topTable(fit.2, coef = "PosVsNeg", sort.by = "logFC", number = Inf)
 tt.DR <- tt.DR[order(-abs(tt.DR$logFC)), ] # Ordered by the absolute value of logFC
 signif <- tt.DR[tt.DR$adj.P.Val < 0.05, ] # Subset of significant p-value
 par(mfrow = c(2, 1))
-plot(density(signif[1:2000, "logFC"]), main = "Distribution of the top 2000 DEG")
-hist(signif[1:2000, "logFC"], main = "Distribution of the top 2000 DEG")
+plot(density(signif[, "logFC"]), main = "Distribution of the top 2000 DEG")
+hist(signif[, "logFC"], main = "Distribution of the top 2000 DEG")
 ```
 ## Functional enrichment
 
 ### topGO 
 We can also group them by GO:
-```{r topGO}
+```{r topGO, eval = FALSE}
 library("topGO")
 allGenes <- tt.DR[, "adj.P.Val"]
 names(allGenes) <- rownames(tt.DR)
@@ -199,15 +202,18 @@ resultKS.elim <- runTest(GOdata.bp, algorithm = "elim", statistic = "ks")
 avgResult <- combineResults(resultFisher, resultKS.weight, resultKS.elim,
                             method = "mean")
 
-allRes <- GenTable(GOdata.bp, classic = resultFisher, weight01 = resultKS.weight,
-                   elim = resultKS.elim, orderBy = "weight01", topNodes = 1000)
+allRes <- GenTable(GOdata.bp, classic = resultFisher, 
+                   weight01 = resultKS.weight, elim = resultKS.elim, 
+                   orderBy = "weight01", topNodes = 1000)
 allRes <- allRes[allRes$weight01 < 0.05, ]
 write.csv(allRes, file = "GO_DR.csv", row.names = FALSE)
 
-showSigOfNodes(GOdata.bp, score(resultKS.weight), firstSigNodes = 10, useInfo = 'all')
+showSigOfNodes(GOdata.bp, score(resultKS.weight), firstSigNodes = 10, 
+               useInfo = 'all')
 title(main = "GO analysis using Weight01 algorithm")
 ```
 In this plot we can observe the relationship between the top 10 significant gene ontologies, using the Weight01 algorithm.
+
 # SessionInfo
 
 ```{r end}
