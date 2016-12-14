@@ -32,7 +32,12 @@ summary(phenoData)
 phenoData
 expression[1:5, 1:5]
 ```
-We can observe the expression uses the RefSeq identifier of NCBI. 
+We can observe the expression uses the RefSeq identifier of NCBI. And that there is a sample identification in the name of  the samples, I proceed to create its own column:
+
+```{r pheno}
+phenoData$paired <- as.numeric(substring(rownames(phenoData), 0, 3))
+```
+
 
 We can calculate the normalization factors used to calculate the Counts per million read: 
 ```{r calcNormFactors}
@@ -52,9 +57,9 @@ logCPM <- cpm(dge, normalized.lib.sizes = TRUE, log = TRUE, prior.count = 3)
 We can observe the quality of the samples with a boxplot and the density of expressions:
 ```{r q_check, fig.width = 30, fig.height = 10}
 boxplot(logCPM, main = "Expression per sample", col = phenoData$G)
-multidensity(logCPM, main = "Densities of expression", legend = NULL,  
+multidensity(logCPM, main = "Densities of expression", legend = phenoData$G,  
              col = phenoData$G)
-avgexp <- rowMeans(expression)
+avgexp <- rowMeans(logCPM)
 hist(avgexp, main = "Histogram of mean expression per gene")
 abline(v = 1, col = "red", lwd = 2)
 ```
@@ -94,7 +99,7 @@ We take advantatge of the plotMDS function of limma package to plot the MDS of t
 
 ```{r plotMDS, message=FALSE }
 plotMDS(DR, top = Inf, labels = phenoData(DR)$G, main = "Samples relationships")
-plotMDS(DR, top = Inf, labels = c(seq(1, 6), seq(1, 6), seq(3, 6)), main = "Samples relationships")
+plotMDS(DR, top = Inf, labels = phenoData(DR)$paired, main = "Samples relationships")
 ```
 
 We can visualize too, the relationship between samples at gene expression by:
@@ -104,7 +109,7 @@ d <- as.dist(1 - cor(logCPM, method = "spearman"))
 cluster <- hclust(d)
 plot(cluster)
 
-colnames(logCPM) <- c(seq(1, 6), seq(1, 6), seq(3, 6))
+colnames(logCPM) <- phenoData(DR)$paired
 d <- as.dist(1 - cor(logCPM, method = "spearman"))
 cluster <- hclust(d)
 plot(cluster)
@@ -113,13 +118,13 @@ colnames(logCPM) <- rownames(phenoData(DR))
 We can see that some samples tend to be paired by the origin of their data.
 
 ## Design
-In this case each type of expression has come from a different subset of the liver, so we should consider each one as an independent group. 
+In this case each type of expression has come from a different subset of the liver, so we should consider each one as an independent group. We also add as covariate the patient from where each sample was obtained.
 ```{r design}
-design <- model.matrix(~0 + phenoData(DR)$G)
+# Grouping by sample origin
+design <- model.matrix(~1 + phenoData(DR)$G) 
 colnames(design) <- c("NEG", "POS", "TOTAL")
-design <- cbind(design, "Patient" = c(seq(from = 1, to = 6, by = 1),
-                                      seq(from = 1, to = 6, by = 1),
-                                      3, 4, 5, 6))
+# Adding covariate of patient origin
+design <- cbind(design, "paired" = phenoData(DR)$paired) 
 design
 ```
 
@@ -165,7 +170,7 @@ summary(results.DR)
 ```
 
 We can observe the quality of the t values over the teoretical quantiles to observe if there is any assumption about the eBayes fitting which doesn't holds. Note that I already modified the expected proportion of genes in the call to eBayes:
-```{r qualtiy, fig.width = 30, fig.height = 30 }
+```{r qualtiy, fig.width = 30, fig.height = 40 }
 par(mfrow = c(3, 3))
 out <- sapply(colnames(results.DR), function(x){
   qqt(fit.2$t[, x], df = fit.2$df.total, main = paste("Student's t Q-Q Plot of", x))
@@ -186,49 +191,62 @@ save(fit, fit.2, design, logCPM, DR, contrasts, file = "DR.RData")
 ```{r DEG_RD, fig.width = 14, fig.height = 30 }
 tt.DR <- topTable(fit.2, coef = "PosVsNeg", sort.by = "logFC", number = Inf)
 tt.DR <- tt.DR[order(-abs(tt.DR$logFC)), ] # Ordered by the absolute value of logFC
+head(tt.DR)
 signif <- tt.DR[tt.DR$adj.P.Val < 0.05, ] # Subset of significant p-value
 par(mfrow = c(2, 1))
-plot(density(signif[, "logFC"]), main = "Distribution of the top 2000 DEG")
-hist(signif[, "logFC"], main = "Distribution of the top 2000 DEG")
+plot(density(signif[1:2000, "logFC"]), main = "Distribution of the top 2000 DEG")
+hist(signif[1:2000, "logFC"], main = "Distribution of the top 2000 DEG")
 ```
+
+In order to store them we use the symbols, somehow a little bit more informative than the numbers:
+
+```{r RD_tt}
+symb <- mapIds(org.Hs.eg.db, keys = rownames(tt.DR), keytype = "REFSEQ", column = "SYMBOL")
+DEG <- cbind("Symbol" = symb, tt.DR)
+write.csv(DEG, file = "DR_PosVsNeg.csv", na = "", row.names = FALSE)
+```
+We stored all the table with `r nrow(DEG)` genes, even though some are not significant and there might be some sequences that come from the same gene but with a different messenger. 
+
 ## Functional enrichment
+
+We can check for functional enrichment, to see if those few significant genes are enriched in performing certain functions and process.
 
 ### topGO 
 We can also group them by GO:
-```{r topGO, eval = FALSE}
+```{r topGO, eval = TRUE, message = FALSE}
 library("topGO")
 allGenes <- tt.DR[, "adj.P.Val"]
 names(allGenes) <- rownames(tt.DR)
 topDiffGenes <- function(x) {
   return(x <= 0.05)
 }
+summary(topDiffGenes(allGenes))
+```
+As there is some problem with the topGO package ,I need to map the ids using mapIds:
+```{r topGO2, error = TRUE, collapse = TRUE, fig.width = 20, fig.height = 40}
+idsMapping <- mapIds(org.Hs.eg.db, names(allGenes), "GO", keytype = "REFSEQ", multiVals = "list")
 GOdata.bp <- new("topGOdata",
                  ontology = "BP",
                  description = "Biological process of the signature module.",
                  allGenes = allGenes,
-                 annot = annFUN.org,
-                 ID = "symbol",
-                 mapping = "org.Hs.eg",
-                 geneSel = topDiffGenes,
+                 annot = annFUN.gene2GO, gene2GO = idsMapping,
+                 geneSelection = topDiffGenes,
                  nodeSize = 5)
-save(GOdata.bp, file = "GO_ALD.RData")
+save(GOdata.bp, file = "GO_DR.RData")
 resultFisher <- runTest(GOdata.bp, algorithm = "classic", statistic = "fisher")
 resultKS.weight <- runTest(GOdata.bp, algorithm = 'weight01', statistic = "ks")
 resultKS.elim <- runTest(GOdata.bp, algorithm = "elim", statistic = "ks")
-avgResult <- combineResults(resultFisher, resultKS.weight, resultKS.elim,
-                            method = "mean")
 
-allRes <- GenTable(GOdata.bp, classic = resultFisher, 
-                   weight01 = resultKS.weight, elim = resultKS.elim, 
-                   orderBy = "weight01", topNodes = 1000)
+allRes <- GenTable(GOdata.bp, classic = resultFisher, weight01 = resultKS.weight,
+                   elim = resultKS.elim, orderBy = "weight01", topNodes = 1000)
 allRes <- allRes[allRes$weight01 < 0.05, ]
-write.csv(allRes, file = "GO_DR.csv", row.names = FALSE)
-
-showSigOfNodes(GOdata.bp, score(resultKS.weight), firstSigNodes = 10, 
-               useInfo = 'all')
-title(main = "GO analysis using Weight01 algorithm")
+write.csv(allRes, file = "GO_DR_progression.csv", row.names = FALSE)
+head(allRes)
+showSigOfNodes(GOdata.bp, score(resultKS.weight), firstSigNodes = 10, useInfo = 'all')
+title(main = "GO analysis using Weight01 algorithm", line = -2)
 ```
-In this plot we can observe the relationship between the top 10 significant gene ontologies, using the Weight01 algorithm.
+
+We can see that there are several GO ontologies related to transport, signaling and regulation of stem cell differenciation, as well as membrane organization. On the plot we can see the relatipn between the top 10 GO calculated using the Weight01 algorithm, some are much closer to the root parent, others are quite specific, as outlied before. 
 
 # SessionInfo
 
