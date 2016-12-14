@@ -21,7 +21,7 @@ This is part of a bigger study you can find [here](index.html)
 The expression data is provided as counts in a tab separate value format. In another file there is the phenoData associated to the samples.
 
 ```{r load}
-count <- read.csv("../data/ALD_ramon/refseq_counts_ALD.csv", row.names = 1)
+count <- read.delim("../data/ALD_ramon/refseq_counts_ALD.tsv", row.names = 1)
 phenoData <- read.csv("../data/ALD_ramon/NGS_AHsteps.design.csv", row.names = 1)
 ```
 
@@ -124,7 +124,6 @@ design <- sapply(names, function(x){
   ifelse(phenoData(ALD)$Status == x, 1, 0)
 })
 rownames(design) <- rownames(phenoData(ALD))
-design <- cbind("(Intercept)" = rep(1, nrow(design)), design)
 design
 ```
 
@@ -166,7 +165,6 @@ Note that even if we filter those with low expression we assign the correct libr
 We can further estimate surrogate variables with the package sva:
 ```{r sva, message = FALSE}
 library("sva")
-design0 <- model.matrix(~1, data = pData(ALD))
 sv1 <- sva(v1$E, design)
 sv2 <- sva(v2$E, design2)
 ```
@@ -239,7 +237,8 @@ out <- sapply(colnames(results), function(x){
 We can visualize the same for the other model we have:
 ```{r quality1, fig.width = 20, fig.height = 10}
 par(mfrow = c(1, 3))
-qqt(fit2.2$t[, "Progression"], df = fit2.2$df.total, main = "Student's t Q-Q Plot of Progression")
+qqt(fit2.2$t[, "Progression"], df = fit2.2$df.total, 
+    main = "Student's t Q-Q Plot of Progression")
 abline(0, 1)
 volcanoplot(fit2.2, coef = "Progression", main = "Progression")
 plotMD(fit2.2, coef = "Progression", main = "Progression")
@@ -274,12 +273,19 @@ out <- sapply(colnames(contrasts0), function(x) {
 For the progression model we can plot it too those top 2000 significative at the threshold of 0.05:
 ```{r DEG_ALD2, fig.width = 30, fig.height = 10 }
 par(mfrow = c(1, 2))
-tt.ALD2 <- topTable(fit2.2, coef = "Progression", sort.by = "logFC", number = Inf)
+tt.ALD2 <- topTable(fit2.2, coef = "Progression", sort.by = "logFC", 
+                    number = Inf)
 tt.ALD2 <- tt.ALD2[order(-abs(tt.ALD2$logFC)), ]
 signif <- tt.ALD2[tt.ALD2$adj.P.Val < 0.05, ] # Subset of significant p-value
 plot(density(signif[1:2000, "logFC"]), main = "Density")
 hist(signif[1:2000, "logFC"], main = "Histogram", xlab = "logFC")
 ```
+In order to store them we proceed with:
+
+```{r ALD2_tt}
+write.csv(tt.ALD2, file = "ALD_Progression.csv", na = "", row.names = FALSE)
+```
+We stored all the table with `r nrow(tt.ALD2)` genes, even though some are not significant.
 
 ```{r signif, echo = FALSE}
 over <- sum(signif[1:2000, "logFC"] > 0)
@@ -336,7 +342,7 @@ We run the program with the following command, we asume that there are 20000 gen
 
 ### topGO 
 We can also group them by GO:
-```{r topGO}
+```{r topGO, error = TRUE, collapse = TRUE, fig.width = 20, fig.height = 40}
 library("topGO")
 allGenes <- tt.ALD2[, "adj.P.Val"]
 names(allGenes) <- rownames(tt.ALD2)
@@ -356,16 +362,14 @@ save(GOdata.bp, file = "GO_ALD.RData")
 resultFisher <- runTest(GOdata.bp, algorithm = "classic", statistic = "fisher")
 resultKS.weight <- runTest(GOdata.bp, algorithm = 'weight01', statistic = "ks")
 resultKS.elim <- runTest(GOdata.bp, algorithm = "elim", statistic = "ks")
-avgResult <- combineResults(resultFisher, resultKS.weight, resultKS.elim,
-                            method = "mean")
 
 allRes <- GenTable(GOdata.bp, classic = resultFisher, weight01 = resultKS.weight,
                    elim = resultKS.elim, orderBy = "weight01", topNodes = 1000)
 allRes <- allRes[allRes$weight01 < 0.05, ]
 write.csv(allRes, file = "GO_ALD_progression.csv", row.names = FALSE)
-
+head(allRes)
 showSigOfNodes(GOdata.bp, score(resultKS.weight), firstSigNodes = 10, useInfo = 'all')
-title(main = "GO analysis using Weight01 algorithm")
+title(main = "GO analysis using Weight01 algorithm", line = -2)
 ```
 In this plot we can observe the relationship between the top 10 significant gene ontologies, using the Weight01 algorithm.
 
