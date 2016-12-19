@@ -121,7 +121,7 @@ We can see that some samples tend to be paired by the origin of their data.
 In this case each type of expression has come from a different subset of the liver, so we should consider each one as an independent group. We also add as covariate the patient from where each sample was obtained.
 ```{r design}
 # Grouping by sample origin
-design <- model.matrix(~1 + phenoData(DR)$G) 
+design <- model.matrix(~0 + phenoData(DR)$G) 
 colnames(design) <- c("NEG", "POS", "TOTAL")
 # Adding covariate of patient origin
 design <- cbind(design, "paired" = phenoData(DR)$paired) 
@@ -194,20 +194,29 @@ tt.DR <- tt.DR[order(-abs(tt.DR$logFC)), ] # Ordered by the absolute value of lo
 head(tt.DR)
 signif <- tt.DR[tt.DR$adj.P.Val < 0.05, ] # Subset of significant p-value
 par(mfrow = c(2, 1))
-plot(density(signif[1:2000, "logFC"]), main = "Distribution of the top 2000 DEG")
-hist(signif[1:2000, "logFC"], main = "Distribution of the top 2000 DEG")
+plot(density(signif[, "logFC"]), main = "Distribution of the top 2000 DEG")
+hist(signif[, "logFC"], main = "Distribution of the top 2000 DEG")
 ```
 
 In order to store them we use the symbols, somehow a little bit more informative than the numbers:
 
 ```{r RD_tt}
+library("org.Hs.eg.db")
 symb <- mapIds(org.Hs.eg.db, keys = rownames(tt.DR), keytype = "REFSEQ", column = "SYMBOL")
 DEG <- cbind("Symbol" = symb, tt.DR)
 write.csv(DEG, file = "DR_PosVsNeg.csv", na = "", row.names = FALSE)
 ```
 We stored all the table with `r nrow(DEG)` genes, even though some are not significant and there might be some sequences that come from the same gene but with a different messenger. 
 
+We can check that KRT7 is more expressed on the positive samples:
+```{r KRT7}
+DEG[grep("(KRT[0-9])", DEG$Symbol), ]
+```
+
+As we would expect, and it is not far from the max log fold-change `r max(signif$logFC)`, in fact is the `r match("KRT7", DEG$Symbol)`th gene more over-expressed.
+
 ## Functional enrichment
+
 
 We can check for functional enrichment, to see if those few significant genes are enriched in performing certain functions and process.
 
