@@ -1,0 +1,82 @@
+---
+title: "Preparating data for the network creation with WGCNA"
+author: "[Lluís Revilla](mailto:lrevilla@clinic.cat)"
+date: "`r Sys.Date()`"
+output:
+  BiocStyle::html_document:
+    toc: true
+  BiocStyle::pdf_document:
+    toc: true
+---
+
+```{r setup, echo=FALSE, results="asis", message=FALSE}
+knitr::opts_chunk$set(tidy = FALSE, echo = TRUE, cache = TRUE, autodep = TRUE)
+```
+
+# Load data
+We start from the expression data we previously normalized for the differential gene expression analysis.
+```{r load, collapse = TRUE}
+load(file = "Expression_ALD.RData", verbose = TRUE)
+load("ALD.RData", verbose = TRUE)
+library("WGCNA")
+```
+Of the second file we are only interested in the design2 object.
+
+# Filtering
+Firt we convert it to the format WGCNA requires (each row a sample, each column a gene). We
+```{r transpose}
+data.wgcna <- t(v1$E)
+vclin0 <- design2[, "Progression", drop = FALSE]
+```
+We will make a network of the whole disease, another for the early steps from Normal to compensated cirrhosis and from non-severe alcoholic hepatitis to severe alcoholic hepatitis.
+```{r filter}
+early.patients <- phenoData$Status %in% c("ASH", "C.Comp", "Normal")
+early.ALD <- data.wgcna[early.patients, ]
+late.ALD <- data.wgcna[!early.patients, ]
+```
+
+# Export
+For an easy use with the TFM repository that will be used I rename the objects and store them separately:
+```{r export1}
+vclin <- phenoData
+gsg <- goodSamplesGenes(data.wgcna)
+data.wgcna <- data.wgcna[gsg$goodSamples, gsg$goodGenes]
+save(data.wgcna, vclin, file = "Whole_Network.RData")
+```
+We can check that the whole data cohort has `r nrow(data.wgcna)` samples and `r sum(gsg$goodGenes)` genes have non zero variance.
+```{r export2}
+gsg <- goodSamplesGenes(early.ALD)
+data.wgcna <- early.ALD[gsg$goodSamples, gsg$goodGenes]
+vclin <- vclin0[colnames(phenoData) %in% rownames(data.wgcna), , drop = FALSE]
+save(data.wgcna, vclin, file = "Early_Network.RData")
+```
+The cohort of patients from the early state of the disease has `r nrow(data.wgcna)` samples and `r sum(gsg$goodGenes)` genes have non zero variance.
+```{r export3}
+gsg <- goodSamplesGenes(late.ALD)
+data.wgcna <- late.ALD[gsg$goodSamples, gsg$goodGenes]
+vclin <- vclin0[colnames(phenoData) %in% rownames(data.wgcna), drop = FALSE]
+save(data.wgcna, vclin, file = "Late_Network.RData")
+```
+So the remaining samples are `r nrow(data.wgcna)` patients and `r sum(gsg$goodGenes)` genes have non zero variance.
+
+We have enough samples to build a robust network with WGCNA for each network. See the first [FAQ](https://labs.genetics.ucla.edu/horvath/CoexpressionNetwork/Rpackages/WGCNA/faq.html) answer.
+# Network building
+
+There are many option to find the co-expressed genes with WGCNA, here I will explain some of the most important:
+
+* networkType
+  This option changes how are negative correlations (You can also use a distance function)considered when building the adjacency matrix . There are three options: 
+    + "unsigned": This option consider correlations independently of the sign.
+    + "signed": Considers as higher similarity those with positive correlation than with negative correlation
+    + "signed hybrid": Considers only the positive correlations.
+* TOMType
+  This option changes how are topological overlap matrices (TOM) calculated. There are two options: 
+    + "unsigned": Don't uses the sign of the correlations to build the TOM matrix from the adjacencies
+    + "signed": Uses the sign of the correlations to build the TOM matrix from the adjacencies
+
+Depending on what is the question one wants to answer should choose between one of those. 
+# SessionInfo
+Here are the packages and the versions used to analyse these data and build this page:
+```{r end}
+sessionInfo()
+```
