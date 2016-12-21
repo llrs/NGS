@@ -1,5 +1,5 @@
 ---
-title: "Alcoholic disease"
+title: "Alcoholic liver disease"
 author: "[Lluís Revilla](mailto:lrevilla@clinic.cat)"
 date: "`r Sys.Date()`"
 output:
@@ -15,8 +15,8 @@ knitr::opts_chunk$set(tidy = FALSE, echo = TRUE, cache = TRUE, autodep = TRUE)
 ```
 This is part of a bigger study you can find [here](index.html)
 
-# Alcohol liver disease
-## Load disease expression
+
+# Load disease expression
 
 The expression data is provided as counts in a tab separate value format. In another file there is the phenoData associated to the samples.
 
@@ -64,7 +64,7 @@ We can normalize the data to counts per millon of reads taking into account that
 expression <- cpm(dge, normalized.lib.sizes = TRUE, log = TRUE, prior.count = 3)
 ```
 
-## Check quality pre-normalizations
+#Check quality pre-normalizations
 We can observe the quality of the samples with a boxplot and the density of expressions:
 ```{r q_check}
 boxplot(expression, main = "Expression per sample", col = phenoData$Status)
@@ -104,7 +104,7 @@ phenoData(ALD) <- AnnotatedDataFrame(phenoData)
 ALD
 ```
 
-## Check the normalizations applied 
+#Check the normalizations applied 
 We take advantatge of the plotMDS function of limma package to plot the MDS of the samples, to see how close are between them. 
 
 ```{r plotMDS, message=FALSE }
@@ -113,7 +113,7 @@ plotMDS(ALD, top = Inf, labels = phenoData(ALD)$Status, main = "Samples relation
 
 We can see that they are clearly separated in two groups, but some samples like the Alcohol Hepatitis samples are on both sites of the first dimension. We can also observe that the cirrhosis compensated samples are closer to the normal or healthy samples.  
 
-## Design 
+#Design 
 
 The design we will use to find the differentially expressed genes is the following:
 ```{r design}
@@ -159,9 +159,13 @@ Normalize the expression by calculating an appropriate observation weight.
 v1 <- voom(dge, design, plot = TRUE, normalize.method = "cyclicloess")
 v2 <- voom(dge, design2, plot = TRUE, normalize.method = "cyclicloess")
 ```
-Note that even if we filter those with low expression we assign the correct library size, to avoid over estimation.
+Note that even if we filter those with low expression we assign the correct library size, to avoid over estimation.  
+We store the normalized expression and the pehnotypic data for uses on the network construction step.
+```{r save_expression}
+save(v1, v2, phenoData, file = "Expression_ALD.RData")
+```
 
-## Estimate surrogate variables
+#Estimate surrogate variables
 We can further estimate surrogate variables with the package sva:
 ```{r sva, message = FALSE}
 library("sva")
@@ -177,6 +181,7 @@ i.design2 <- cbind(design2, sv2$sv)
 colnames(i.design2) <- c(colnames(design2), paste0("X", 1:ncol(sv2$sv)))
 ```
 
+
 We fit each design with the expression of the alcoholic liver disease:
 
 ```{r fitting}
@@ -184,29 +189,30 @@ fit <- lmFit(v1$E, i.design)
 fit.2 <- lmFit(v2$E, i.design2)
 ```
 
-## Contrasts
+#Contrasts
 
 We are interested in several comparisons, in the first design:
 ```{r contrasts}
-contrasts0 <- makeContrasts("ASHvsNormal" = ASH - Normal,
-                          "CirrhosisVsNormal" = C.Comp - Normal,
-                          "AHvsNormal" = AH - Normal,
-                          "RespondersVsNormal" = Responders - Normal,
-                          "Non.respondersVsNormal" = Non.responders - Normal,
-                          
-                          # Assuming that some status are similar
-                          "SevereVsNormal" = (Responders + Non.responders)/2 - Normal,
-                          
-                          "RespondersVsNon.responders" = Responders - Non.responders,
-                          
-                          "CirrhosisVsASH" = C.Comp - ASH,
-                          "AHvsCirrhosis" = AH - C.Comp,
-
-                          "Non.respondersVsAH" = Non.responders - AH,
-                          "RespondersVsAH" = Responders - AH,
-                          "SevereVsHepatitis" = (Non.responders + Responders)/2 - AH,
-                          
-                          levels = i.design)
+contrasts0 <- makeContrasts(
+  "ASHvsNormal" = ASH - Normal,
+  "CirrhosisVsNormal" = C.Comp - Normal,
+  "AHvsNormal" = AH - Normal,
+  "RespondersVsNormal" = Responders - Normal,
+  "Non.respondersVsNormal" = Non.responders - Normal,
+  
+  # Assuming that some status are similar
+  "SevereVsNormal" = (Responders + Non.responders)/2 - Normal,
+  
+  "RespondersVsNon.responders" = Responders - Non.responders,
+  
+  "CirrhosisVsASH" = C.Comp - ASH,
+  "AHvsCirrhosis" = AH - C.Comp,
+  
+  "Non.respondersVsAH" = Non.responders - AH,
+  "RespondersVsAH" = Responders - AH,
+  "SevereVsHepatitis" = (Non.responders + Responders)/2 - AH,
+  
+  levels = i.design)
 head(contrasts0)
 ```
 
@@ -251,14 +257,14 @@ plotSA(fit2, main = "First model: Mean−variance trend")
 plotSA(fit2.2, main = "Progression model: Mean−variance trend")
 ```
 
-## Store data
+#Store data
 It is a good idea to store the data, not only the program of your analysis, so here I go:
 ```{r store_ALD}
 save(fit, fit2, fit2.2, fit.2, design, design2, i.design, i.design2, 
      dge, ALD, contrasts0, v1, v2, file = "ALD.RData")
 ```
 
-## Differentially expressed genes
+#Differentially expressed genes
 
 We can plot the top 2000 genes with the highest absolute value of log fold-change in each contrast just for informative purposes:
 ```{r DEG_ALD, fig.width = 30, fig.height = 84}
@@ -327,7 +333,7 @@ vennDiagram(results[, c(3, 6)], include = "down",
             main = "Genes Down-regulated")
 ```
 
-## Functional enrichment
+#Functional enrichment
 We can group genes by function using [geneSCF](http://genescf.kandurilab.org/), which is a program written in perl. As input it requires a list of genes with each line the name of the gene:
 
 ```{r geneSCF}
@@ -340,7 +346,7 @@ We run the program with the following command, we asume that there are 20000 gen
 ./geneSCF -m=normal -i=genes_list.txt -t=sym -db=REACTOME -o=. -bg=20000 -org=Hs -p=yes
 ```
 
-### topGO 
+##topGO 
 We can also group them by GO:
 ```{r topGO, error = TRUE, collapse = TRUE, fig.width = 20, fig.height = 40}
 library("topGO")
