@@ -231,7 +231,7 @@ topDiffGenes <- function(x) {
 }
 summary(topDiffGenes(allGenes))
 ```
-As there is some problem with the topGO package ,I need to map the ids using mapIds:
+As there is some problem with the topGO package, I need to map the ids using mapIds:
 ```{r topGO2, error = TRUE, collapse = TRUE, fig.width = 20, fig.height = 40}
 idsMapping <- mapIds(org.Hs.eg.db, names(allGenes), "GO", keytype = "REFSEQ", multiVals = "list")
 GOdata.bp <- new("topGOdata",
