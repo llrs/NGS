@@ -10,7 +10,7 @@
 
 <meta name="author" content="Lluís Revilla" />
 
-<meta name="date" content="2016-12-09" />
+<meta name="date" content="2016-12-21" />
 
 <title>The weight of the ductular reaction in alcohol liver disease</title>
 
@@ -51,7 +51,7 @@ document.addEventListener("DOMContentLoaded", function() {
 <div id="header">
 <h1 class="title">The weight of the ductular reaction in alcohol liver disease</h1>
 <h4 class="author"><em><a href="mailto:lrevilla@clinic.cat">Lluís Revilla</a></em></h4>
-<h4 class="date"><em>2016-12-09</em></h4>
+<h4 class="date"><em>2016-12-21</em></h4>
 </div>
 
 <h1>Contents</h1>
@@ -63,8 +63,7 @@ document.addEventListener("DOMContentLoaded", function() {
 <li><a href="#networks"><span class="toc-section-number">1.3</span> Networks</a></li>
 <li><a href="#biocor"><span class="toc-section-number">1.4</span> BioCor</a></li>
 </ul></li>
-<li><a href="#analysis"><span class="toc-section-number">2</span> Analysis</a></li>
-<li><a href="#sessioninfo"><span class="toc-section-number">3</span> SessionInfo</a></li>
+<li><a href="#sessioninfo"><span class="toc-section-number">2</span> SessionInfo</a></li>
 </ul>
 </div>
 
@@ -72,31 +71,26 @@ document.addEventListener("DOMContentLoaded", function() {
 <h1><span class="header-section-number">1</span> Steps</h1>
 <div id="ductular-reaction-signature" class="section level2">
 <h2><span class="header-section-number">1.1</span> Ductular reaction signature</h2>
-<p>Obtain the ductular reaction signature the top 2000 genes differentially genes</p>
+<p>Obtain the ductular reaction signature of the top positive differentially expressed genes in the ductular reaction vs non-ductular reaction in the liver. You can find the analysis performed <a href="Ductular_reaction.html">here</a>.</p>
 </div>
 <div id="alcoholic-liver-disease-signature" class="section level2">
 <h2><span class="header-section-number">1.2</span> Alcoholic liver disease signature</h2>
-<p>Obtain the alcoholic liver disease signature of the progression of the disease the top 2000 differentially expressed genes.</p>
+<p>Obtain the alcoholic liver disease signature of the progression of the disease: the differentially expressed genes. You can find the analysis performed <a href="Alcoholic_disease.html">here</a>.</p>
 </div>
 <div id="networks" class="section level2">
 <h2><span class="header-section-number">1.3</span> Networks</h2>
-<p>Use <a href="https://labs.genetics.ucla.edu/horvath/CoexpressionNetwork/Rpackages/WGCNA/">WGCNA</a> to build the co-expressed genes of the alcoholic liver disease. And test the enrichment in the modules with genes differentially expressed genes of the ductular reaction.</p>
+<ol style="list-style-type: decimal">
+<li>Use <a href="https://labs.genetics.ucla.edu/horvath/CoexpressionNetwork/Rpackages/WGCNA/">WGCNA</a> to build the co-expressed genes of the alcoholic liver disease. And test the enrichment in the modules with the singature of the ductular reaction. <a href="Networks-1.html">Here</a> you can find the steps to prepare for WGCNA, but the code used is on the <a href="https://github.com/llrs/TFM">TFM repository</a></li>
+<li>Test with a GSA if in the genes differentially expressed in the disease are enriched in the singature of the ductular reaction. The GSEA has been performed with the same code base of the TFM repository.</li>
+</ol>
 </div>
 <div id="biocor" class="section level2">
 <h2><span class="header-section-number">1.4</span> BioCor</h2>
-<p>Test if <a href="https://github.com/llrs/BioCor">BioCor</a> works better finding, and grouping genes.</p>
+<p>Test if <a href="https://github.com/llrs/BioCor">BioCor</a> works better grouping genes by functionallity. This is a new package under development.</p>
 </div>
-</div>
-<div id="analysis" class="section level1">
-<h1><span class="header-section-number">2</span> Analysis</h1>
-<p>You can see the analysis of data in this folder:</p>
-<ul>
-<li><a href="Ductular_reaction.html">Ductular reaction</a></li>
-<li><a href="Alcoholic_disease.html">Alcoholic disease</a></li>
-</ul>
 </div>
 <div id="sessioninfo" class="section level1">
-<h1><span class="header-section-number">3</span> SessionInfo</h1>
+<h1><span class="header-section-number">2</span> SessionInfo</h1>
 <pre class="r"><code>sessionInfo()</code></pre>
 <pre><code>## R version 3.3.2 (2016-10-31)
 ## Platform: x86_64-pc-linux-gnu (64-bit)

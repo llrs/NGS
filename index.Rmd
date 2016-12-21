@@ -17,25 +17,21 @@ knitr::opts_chunk$set(tidy = FALSE, echo = TRUE, cache = TRUE, autodep = TRUE)
 
 ## Ductular reaction signature
 
-Obtain the ductular reaction signature the top 2000 genes differentially genes
-
+Obtain the ductular reaction signature of the top positive differentially expressed genes in the ductular reaction vs non-ductular reaction in the liver. You can find the analysis performed [here](Ductular_reaction.html).
+  
 ## Alcoholic liver disease signature
 
-Obtain the alcoholic liver disease signature of the progression of the disease the top 2000 differentially expressed genes.
+Obtain the alcoholic liver disease signature of the progression of the disease: the differentially expressed genes. You can find the analysis performed [here](Alcoholic_disease.html).
 
 ## Networks
-Use [WGCNA](https://labs.genetics.ucla.edu/horvath/CoexpressionNetwork/Rpackages/WGCNA/) to build the co-expressed genes of the alcoholic liver disease. And test the enrichment in the modules with genes differentially expressed genes of the ductular reaction.
+  1. Use [WGCNA](https://labs.genetics.ucla.edu/horvath/CoexpressionNetwork/Rpackages/WGCNA/) to build the co-expressed genes of the alcoholic liver disease. And test the enrichment in the modules with the singature of the ductular reaction.  
+  [Here](Network.html) you can find the steps to prepare for WGCNA, but the code used is on the [TFM repository](https://github.com/llrs/TFM)
+  2. Test with a GSA if in the genes differentially expressed in the disease are enriched in the singature of the ductular reaction. The GSEA has been performed with the same code base of the TFM repository.
 
 ## BioCor
 
-Test if [BioCor](https://github.com/llrs/BioCor) works better finding, and grouping genes.
+Test if [BioCor](https://github.com/llrs/BioCor) works better grouping genes by functionallity. This is a new package under development.
 
-# Analysis
-
-You can see the analysis of data in this folder:
-
- - [Ductular reaction](Ductular_reaction.html)
- - [Alcoholic disease](Alcoholic_disease.html)
 
 # SessionInfo
 
