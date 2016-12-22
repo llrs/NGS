@@ -38,7 +38,7 @@ late.ALD <- data.wgcna[!early.patients, ]
 # Export
 For an easy use with the TFM repository that will be used I rename the objects and store them separately:
 ```{r export1}
-vclin <- phenoData
+vclin <- vclin0
 gsg <- goodSamplesGenes(data.wgcna)
 data.wgcna <- data.wgcna[gsg$goodSamples, gsg$goodGenes]
 save(data.wgcna, vclin, file = "Whole_Network.RData")
