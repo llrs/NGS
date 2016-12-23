@@ -21,8 +21,10 @@ This data was extracted from a liver, the POS labels indicate that were extracte
 ## Load the data of ductular reaction
 
 ```{r load}
-phenoData <- read.csv("../data/ductular_reaction/PHENO_26_10_2015.csv", row.names = 1)
-expression <- read.delim("../data/ductular_reaction/refseq_counts_DR.csv", row.names = 1)
+phenoData <- read.csv("../data/ductular_reaction/PHENO_26_10_2015.csv", 
+                      row.names = 1)
+expression <- read.delim("../data/ductular_reaction/refseq_counts_DR.csv", 
+                         row.names = 1)
 ```
 We explore these data:
 
@@ -121,10 +123,11 @@ We can see that some samples tend to be paired by the origin of their data.
 In this case each type of expression has come from a different subset of the liver, so we should consider each one as an independent group. We also add as covariate the patient from where each sample was obtained.
 ```{r design}
 # Grouping by sample origin
-design <- model.matrix(~0 + phenoData(DR)$G) 
+design <- model.matrix(~0 + phenoData(DR)$G)
 colnames(design) <- c("NEG", "POS", "TOTAL")
 # Adding covariate of patient origin
 design <- cbind(design, "paired" = phenoData(DR)$paired) 
+design0 <- cbind("group" = as.numeric(phenoData(DR)$G), design[, 3, drop = FALSE])
 design
 ```
 
@@ -133,23 +136,41 @@ And we can adjust the data using the weights previously calculated and the desig
 v <- voom(dge, design, plot = TRUE, normalize.method = "cyclicloess")
 ```
 
-## Estimate surrogate variables
-We can further estimate surrogate variables with the package sva:
-```{r sva, message = FALSE}
+We can see that the adjusted value:
+```{r p-values}
 library("sva")
-sv <- sva(v$E, design)
+pValues <- f.pvalue(v$E, design, design0)
+qValues <- p.adjust(pValues, method = "BH")
+hist(qValues)
 ```
+As we can see, there is a peak in the low p-values for real differentially expressed genes.
+
+## Estimate surrogate variables
+We can estimate surrogate variables with the function sva:
+```{r sva, message = FALSE}
+sv <- sva(v$E, design, design0, method = "irw")
+```
+
 We can append the estimated surrogated variables to the design matrix for a better estimation of the effect of each paramter:
 
 ```{r cbind_design}
 i.design <- cbind(design, sv$sv)
 colnames(i.design) <- c(colnames(design), paste0("X", 1:ncol(sv$sv)))
+i.design0 <- cbind(design0, sv$sv)
+colnames(i.design0) <- c(colnames(design0), paste0("X", 1:ncol(sv$sv)))
 ```
+We can check if now using the estimated surrogate variables makes the null hypothesis more uniform than previously:
 
-We fit the design with the expression of the ductular reaction:
+```{r p-values-sva}
+pValues <- f.pvalue(v$E, i.design, i.design0)
+qValues <- p.adjust(pValues, method = "BH")
+hist(qValues)
+```
+Even after adjusting for surrogate variables it doesn't improve the model. Maybe because we expect big differences between KRT+ and KRT- samples. 
+We fit the design with the expression of the ductular reaction, without taking into account the surrogate variables
 
 ```{r fitting}
-fit <- lmFit(v$E, i.design)
+fit <- lmFit(v$E, design)
 ```
 
 ## Contrasts
@@ -158,7 +179,7 @@ We are interested in the Positive vs Negative comparison, but we can compute oth
 contrasts <- makeContrasts("PosVsNeg" = POS - NEG,
                            "PosVsTotal" = POS - TOTAL,
                            "NegVsTotal" = NEG - TOTAL, 
-                           levels = i.design)
+                           levels = design)
 contrasts
 ```
 
