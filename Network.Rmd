@@ -35,6 +35,69 @@ early.ALD <- data.wgcna[early.patients, ]
 late.ALD <- data.wgcna[!early.patients, ]
 ```
 
+# Check data
+
+In order to see if the data really reflects what the model we can plot it in a PCA:
+```{r PCA, collapse = TRUE}
+library("ggbiplot")
+
+dists <- function(data) {
+  as.dist(1 - WGCNA::cor(data, method = "spearman",
+                                  use = "pairwise.complete.obs"))
+}
+
+MDS.graph <- function(dists, outcome, col=NULL) {
+  
+  cmd <- cmdscale(dists, eig = TRUE, add = TRUE)
+  perc.v <- round(cmd$eig/sum(cmd$eig)*100, 1)
+  plot(cmd$points[, 1], cmd$points[, 2], type = "n", main = "MDS",
+       xlab = paste0("PC1 (", perc.v[1], "% explained var.)"),
+       ylab = paste0("PC2 (", perc.v[2], "% explained var.)"))
+  text(cmd$points[,1 ], cmd$points[, 2], col = col, cex = 0.9,
+       labels = outcome)
+  invisible(cmd)
+}
+
+PCA.graph <- function(dists, outcome) {
+  pca <- prcomp(dists, scale. = TRUE)
+  pca.plo <- ggbiplot(pca, obs.scale = 1, var.scale = 1, ellipse = TRUE,
+                      group = outcome, var.axes = FALSE, main = "PCA")
+  plot(pca.plo)
+  invisible(pca)
+}
+
+explore <- function(data, outcome, col, file) {
+  dists <- dists(data)
+  pdf(file)
+  PCA.graph(dists, outcome)
+  MDS.graph(dists, outcome, col)
+  dev.off()
+}
+
+colors <- c(rep("red", 18), rep("orange", 11), rep("yellow", 12), rep("pink", 9), rep("green", 10))
+explore(data = v1$E, file = "Whole_set.pdf", outcome = phenoData$Status, 
+        col = colors)
+
+early.vclin <- vclin0[rownames(phenoData) %in% rownames(early.ALD), , drop = FALSE]
+explore(data = t(early.ALD), file = "Early_ALD.pdf", 
+        outcome = phenoData$Status[30:60], col = colors[30:60])
+
+late.vclin <- vclin0[rownames(phenoData) %in% rownames(late.ALD), , drop = FALSE]
+explore(data = t(late.ALD), file = "Late_ALD.pdf", outcome = phenoData$Status[1:29],
+        col = colors[1:29])
+
+d <- dists(v1$E)
+PCA.graph(d, phenoData$Status)
+```
+
+As we can see on the MDS (and others not shown, but stored in the files) the data reflects the differences and confirms the model. Furthermore, it also confirms that dividing in this two steps also provides a good distinction between samples. However there is a clear outlier: the sample E49. It has clearly a different expression than other samples, maybe because she/he had other complications. In order to avoid introducing noise to the networks we remove this sample for the network constructions:
+
+```{r outlier}
+data.wgcna <- data.wgcna[!"E49" == rownames(data.wgcna), ]
+early.ALD <- early.ALD[!"E49" == rownames(early.ALD), ]
+```
+Now we can save the data ready for WGCNA
+
 # Export
 For an easy use with the TFM repository that will be used I rename the objects and store them separately:
 ```{r export1}
@@ -47,7 +110,6 @@ We can check that the whole data cohort has `r nrow(data.wgcna)` samples and `r 
 ```{r export2}
 gsg <- goodSamplesGenes(early.ALD)
 data.wgcna <- early.ALD[gsg$goodSamples, gsg$goodGenes]
-early.vclin <- vclin0[rownames(phenoData) %in% rownames(early.ALD), , drop = FALSE]
 vclin <- early.vclin
 save(data.wgcna, vclin, file = "Early_Network.RData")
 ```
@@ -55,69 +117,12 @@ The cohort of patients from the early state of the disease has `r nrow(data.wgcn
 ```{r export3}
 gsg <- goodSamplesGenes(late.ALD)
 data.wgcna <- late.ALD[gsg$goodSamples, gsg$goodGenes]
-late.vclin <- vclin0[rownames(phenoData) %in% rownames(late.ALD), , drop = FALSE]
 vclin <- late.vclin
 save(data.wgcna, vclin, file = "Late_Network.RData")
 ```
 So the remaining samples are `r nrow(data.wgcna)` patients and `r sum(gsg$goodGenes)` genes have non zero variance.
 
 We have enough samples to build a robust network with WGCNA for each network. See the first [FAQ](https://labs.genetics.ucla.edu/horvath/CoexpressionNetwork/Rpackages/WGCNA/faq.html) answer.
-# Check data
-
-In order to see if the data really reflects what the model we can plot it in a PCA:
-```{r PCA, collapse = TRUE}
-library("ggbiplot")
-pca.graph <- function(celfiles=NULL, data=NULL, file, outcome = NULL,
-                      col = NULL, ...) {
-  # Data is the normalized, celfiles are the raw files
-  if (is.null(data)) {
-    if (!is.null(celfiles)) {
-      data <- rma(celfiles)
-    } else {
-      stop("celfiles or data must be provided")
-    }
-  }
-
-  if ("ExpressionSet" %in% is(data)) {
-    if (is.null(outcome)) {
-      outcome <- as.character(phenoData(data)$Type)
-    }
-    dists <- as.dist(1 - cor(exprs(data), method = "spearman"))
-  } else {
-    if (is.null(outcome)) {
-      outcome <- rep("AH", ncol(data))
-    }
-    dists <- as.dist(1 - WGCNA::cor(data, method = "spearman",
-                                    use = "pairwise.complete.obs"))
-  }
-
-  cmd <- cmdscale(dists, eig = TRUE, add = TRUE)
-  perc.v <- round(cmd$eig/sum(cmd$eig)*100, 1)
-  pdf(file)
-  pca.plo <- ggbiplot(prcomp(dists, scale. = TRUE),
-                      obs.scale = 1, var.scale = 1, ellipse = TRUE,
-                      group = outcome, var.axes = FALSE,
-                      # circle = TRUE
-  )
-  plot(pca.plo)
-  plot(cmd$points[, 1], cmd$points[, 2], type = "n", main = "MDS samples",
-       xlab = paste0("PC1 (", perc.v[1], "% explained var.)"),
-       ylab = paste0("PC2 (", perc.v[2], "% explained var.)"),
-       ...)
-  text(cmd$points[,1 ], cmd$points[, 2], col = col, cex = 0.9,
-       labels = outcome)
-  dev.off()
-  invisible(cmd)
-}
-MDS <- pca.graph(data = v1$E, file = "Whole_set.pdf", outcome = phenoData$Status)
-pca.graph(data = t(early.ALD), file = "Early_ALD.pdf", outcome = early.vclin)
-pca.graph(data = t(late.ALD), file = "Late_ALD.pdf", outcome = late.vclin)
-rownames(MDS$points) <- phenoData$Status
-plot(MDS$points, main = "Samples differences", col = c("black", "green", "yellow", "orange", "darkorange", "red", "red"))
-legend("bottomleft", legend = unique(phenoData$Status), fill = c("black", "green", "yellow", "orange", "darkorange", "red"))
-```
-
-As we can see on the MDS (and others not shown) the data reflects the differences and confirms the model. Furthermore, it also confirms that dividing in this two steps also provides a good distinction between samples.
 
 # Network building
 
@@ -133,7 +138,8 @@ There are many option to find the co-expressed genes with WGCNA, here I will exp
     + "unsigned": Don't uses the sign of the correlations to build the TOM matrix from the adjacencies
     + "signed": Uses the sign of the correlations to build the TOM matrix from the adjacencies
 
-Depending on what is the question one wants to answer should choose between one of those. 
+Depending on what is the question one wants to answer should choose between one of those.
+
 # SessionInfo
 Here are the packages and the versions used to analyse these data and build this page:
 ```{r end}
