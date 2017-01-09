@@ -48,7 +48,8 @@ dge <- DGEList(counts = expression, group = phenoData$G)
 ord <- order(dge$sample$lib.size)
 barplot(dge$sample$lib.size[ord]/1e6, las = 1, ylab = "Millions of reads",
         xlab = "Samples", main = "Library size of the samples", col = phenoData$G)
-legend("topleft", legend = unique(phenoData$G), fill = unique(phenoData$Status))
+legend("topleft", legend = levels(phenoData$G), 
+       fill = seq_along(levels(phenoData$G)))
 dge <- calcNormFactors(dge)
 ```
 We can normalize the data to counts per millon of reads taking into account that we know the normalized library size:
