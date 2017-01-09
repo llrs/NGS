@@ -16,7 +16,7 @@ This is part of a bigger study you can find [here](index.html)
 
 # Ductular Reaction
 
-This data was extracted from a liver, the POS labels indicate that were extracted from a microdisection with KRT7 positive. NEG indicates that for the same microdisection those not stained for KRT7 where taken. TOTAL indicates that there is a mix of KRT7+ and KRT7- dyeing. Also this data has been already normalized.
+This data was extracted from a liver, the POS labels indicate that were extracted from a microdisection with KRT7 positive. NEG indicates that for the same microdisection those not stained for KRT7 where taken. TOTAL indicates that there is a mix of KRT7+ and KRT7- dyeing. 
 
 ## Load the data of ductular reaction
 
