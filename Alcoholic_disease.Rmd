@@ -54,9 +54,13 @@ We can calculate the normalization factors used to calculate the Counts per mill
 library("edgeR")
 dge <- DGEList(counts = count, group = phenoData$Status)
 ord <- order(dge$sample$lib.size)
+
 barplot(dge$sample$lib.size[ord]/1e6, las = 1, ylab = "Millions of reads",
-        xlab = "Samples", main = "Library size of the samples", col = phenoData$Status)
-legend("topleft", legend = unique(phenoData$Status), fill = unique(phenoData$Status))
+        xlab = "Samples", main = "Library size of the samples", 
+        col = droplevels(phenoData$Status))
+
+legend("topleft", legend = levels(droplevels(phenoData$Status)), 
+       fill = seq_along(levels(droplevels(phenoData$Status))))
 dge <- calcNormFactors(dge)
 ```
 We can normalize the data to counts per millon of reads taking into account that we know the normalized library size:
@@ -67,7 +71,8 @@ expression <- cpm(dge, normalized.lib.sizes = TRUE, log = TRUE, prior.count = 3)
 #Check quality pre-normalizations
 We can observe the quality of the samples with a boxplot and the density of expressions:
 ```{r q_check}
-boxplot(expression, main = "Expression per sample", col = phenoData$Status)
+boxplot(expression, main = "Expression per sample", 
+        col = droplevels(phenoData$Status))
 multidensity(expression, main = "Densities of expression", legend = NULL)
 avgexp <- rowMeans(expression)
 hist(avgexp, main = "Histogram of mean expression per gene")
@@ -88,7 +93,8 @@ expression <- cpm(dge, normalized.lib.sizes = TRUE, log = TRUE, prior.count = 3)
 ```
 We can check how has this normalization affected the values:
 ```{r q_check2}
-boxplot(expression, main = "Expression per sample", col = phenoData$Status)
+boxplot(expression, main = "Expression per sample", col = 
+        droplevels(phenoData$Status))
 multidensity(expression, main = "Densities of expression", legend = NULL)
 avgexp <- rowMeans(expression)
 hist(avgexp, main = "Histogram of mean expression per gene")
@@ -100,7 +106,7 @@ To work easier with the data I proceed to create an ExpressionSet
 library("Biobase")
 library("AnnotationDbi")
 ALD <- ExpressionSet(as.matrix(expression))
-phenoData(ALD) <- AnnotatedDataFrame(phenoData)
+phenoData(ALD) <- AnnotatedDataFrame(droplevels(phenoData))
 ALD
 ```
 
@@ -118,7 +124,7 @@ We can see that they are clearly separated in two groups, but some samples like 
 The design we will use to find the differentially expressed genes is the following:
 ```{r design}
 # To ensure sintactically valid names
-names <- make.names(levels(droplevels(phenoData(ALD)$Status))) 
+names <- make.names(levels(phenoData(ALD)$Status))
 design <- sapply(names, function(x){
   x <- ifelse(x == "Non.responders", "Non-responders", x)
   ifelse(phenoData(ALD)$Status == x, 1, 0)
@@ -166,27 +172,53 @@ save(v1, v2, phenoData, file = "Expression_ALD.RData")
 ```
 
 #Estimate surrogate variables
-We can further estimate surrogate variables with the package sva:
-```{r sva, message = FALSE}
+We can further estimate the number of surrogate variables and the surrogate variables with the package sva:
+```{r sva, message = FALSE, collapse=TRUE}
 library("sva")
-sv1 <- sva(v1$E, design)
-sv2 <- sva(v2$E, design2)
+n.sv1 <- num.sv(v1$E, design, "leek")
+n.sv2 <- num.sv(v2$E, design2, "leek")
+if (n.sv1 >= 1) {
+  sv1 <- sva(v1$E, design, n.sv = n.sv1)
+  head(sv1$sv)
+}
+if (n.sv2 >= 1) {
+  sv2 <- sva(v2$E, design2, n.sv = n.sv2)
+  head(sv2$sv)
+}
 ```
 We can append the estimated surrogated variables to the design matrix for a better estimation of the effect of each paramter:
 
-```{r cbind_design}
-i.design <- cbind(design, sv1$sv)
-colnames(i.design) <- c(colnames(design), paste0("X", 1:ncol(sv1$sv)))
-i.design2 <- cbind(design2, sv2$sv)
-colnames(i.design2) <- c(colnames(design2), paste0("X", 1:ncol(sv2$sv)))
+```{r cbind_design, echo=TRUE}
+if (n.sv1 >= 1) {
+  i.design <- cbind(design, sv1$sv)
+  colnames(i.design) <- c(colnames(design), paste0("X", 
+                                                   1:ncol(sv1$sv)))
+}
+if (n.sv2 >= 1) {
+  i.design2 <- cbind(design2, sv2$sv)
+  colnames(i.design2) <- c(colnames(design2), 
+                           paste0("X", 1:ncol(sv2$sv)))
+}
 ```
+We can observe how this adjustment has helped to uniform the p-values. As we would expect a uniform probability of each gene being differentially expressed.
 
-
-We fit each design with the expression of the alcoholic liver disease:
+```{r p-values-sva}
+if (n.sv2 >= 1) {
+  pValues <- f.pvalue(v1$E, i.design, design)
+  qValues <- p.adjust(pValues, method = "BH")
+  hist(qValues)
+}
+if (n.sv2 >= 1) {
+  pValues <- f.pvalue(v2$E, i.design2, design2)
+  qValues <- p.adjust(pValues, method = "BH")
+  hist(qValues)
+}
+```
+As we can see the surrogate variables, don't help to improve the data ajustment, because the distribution of the qValues is not uniform. We fit each design with the expression of the alcoholic liver disease:
 
 ```{r fitting}
-fit <- lmFit(v1$E, i.design)
-fit.2 <- lmFit(v2$E, i.design2)
+fit <- lmFit(v1$E, design)
+fit.2 <- lmFit(v2$E, design2)
 ```
 
 #Contrasts
@@ -212,7 +244,7 @@ contrasts0 <- makeContrasts(
   "RespondersVsAH" = Responders - AH,
   "SevereVsHepatitis" = (Non.responders + Responders)/2 - AH,
   
-  levels = i.design)
+  levels = design)
 head(contrasts0)
 ```
 
@@ -220,11 +252,11 @@ Given those comparisons of interest we now evaluate the results:
 
 ```{r contrast_fit}
 fit2 <- contrasts.fit(fit, contrasts0)
-fit2 <- eBayes(fit2, proportion = 0.1)
+fit2 <- eBayes(fit2)
 results <- decideTests(fit2, adjust.method = "fdr", lfc = log2(2))
 summary(results)
 
-fit2.2 <- eBayes(fit.2, proportion = 0.75) 
+fit2.2 <- eBayes(fit.2) 
 results2 <- decideTests(fit2.2, adjust.method = "fdr", lfc = log2(2))
 summary(results2)
 ```
@@ -260,8 +292,8 @@ plotSA(fit2.2, main = "Progression model: Mean−variance trend")
 #Store data
 It is a good idea to store the data, not only the program of your analysis, so here I go:
 ```{r store_ALD}
-save(fit, fit2, fit2.2, fit.2, design, design2, i.design, i.design2, 
-     dge, ALD, contrasts0, v1, v2, file = "ALD.RData")
+save(fit, fit2, fit2.2, fit.2, design, design2, dge, ALD, contrasts0, v1, v2, 
+     file = "ALD.RData")
 ```
 
 #Differentially expressed genes
