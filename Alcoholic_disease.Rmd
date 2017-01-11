@@ -65,7 +65,8 @@ dge <- calcNormFactors(dge)
 ```
 We can normalize the data to counts per millon of reads taking into account that we know the normalized library size:
 ```{r cpm}
-expression <- cpm(dge, normalized.lib.sizes = TRUE, log = TRUE, prior.count = 3)
+expression <- cpm(dge, normalized.lib.sizes = TRUE, log = TRUE,
+                  prior.count = 3)
 ```
 
 #Check quality pre-normalizations
@@ -89,7 +90,8 @@ Following the recomendation of the edgeR package we recalculate the normalizatio
 
 ```{r recalc}
 dge <- calcNormFactors(dge[avgexp > 1, ])
-expression <- cpm(dge, normalized.lib.sizes = TRUE, log = TRUE, prior.count = 3)
+expression <- cpm(dge, normalized.lib.sizes = TRUE, log = TRUE,
+                  prior.count = 3)
 ```
 We can check how has this normalization affected the values:
 ```{r q_check2}
@@ -121,7 +123,9 @@ We can see that they are clearly separated in two groups, but some samples like 
 
 #Design 
 
-The design we will use to find the differentially expressed genes is the following:
+We are interested in the progression of the disease, both how does the expression of genes change in each step, and the overall change that leads the disease. 
+
+The design we will use to find the differentially expressed genes in each step is the following:
 ```{r design}
 # To ensure sintactically valid names
 names <- make.names(levels(phenoData(ALD)$Status))
@@ -133,7 +137,8 @@ rownames(design) <- rownames(phenoData(ALD))
 design
 ```
 
-As you can see each group has its own colum to increase the power to the model, and to allow for more informative contrasts.
+As you can see each group has its own column to increase the power to the model, and to allow for more informative contrasts. To see the overall change of the disease we can use only one column. We are not interested in other phenotipic change, so how the patient responds to drug is not interesting to us, and it is considered as a single category. In the previous design we will check that Responders and Non-responders are almost equal in gene expression. 
+
 ```{r design2}
 refact <- function(x) {
   if (x == "Normal") {
@@ -172,47 +177,53 @@ save(v1, v2, phenoData, file = "Expression_ALD.RData")
 ```
 
 #Estimate surrogate variables
+We can observe how good they behave 
+```{r sva-load}
+library("sva")
+mod0 <- matrix(1, nrow = nrow(design))
+```
+
+```{r p-values}
+pValues <- f.pvalue(v1$E, design, mod0)
+qValues <- p.adjust(pValues, method = "BH")
+hist(qValues, sub = "Using surrogate variables")
+
+pValues <- f.pvalue(v2$E, design2, mod0)
+qValues <- p.adjust(pValues, method = "BH")
+hist(qValues, sub = "Using surrogate variables")
+```
+
 We can further estimate the number of surrogate variables and the surrogate variables with the package sva:
 ```{r sva, message = FALSE, collapse=TRUE}
-library("sva")
-n.sv1 <- num.sv(v1$E, design, "leek")
-n.sv2 <- num.sv(v2$E, design2, "leek")
-if (n.sv1 >= 1) {
-  sv1 <- sva(v1$E, design, n.sv = n.sv1)
-  head(sv1$sv)
-}
-if (n.sv2 >= 1) {
-  sv2 <- sva(v2$E, design2, n.sv = n.sv2)
-  head(sv2$sv)
-}
+# Our null model is that all samples express the same
+sv1 <- sva(v1$E, design, mod0)
+head(sv1$sv)
+sv2 <- sva(v2$E, design2, mod0)
+head(sv2$sv)
 ```
 We can append the estimated surrogated variables to the design matrix for a better estimation of the effect of each paramter:
 
 ```{r cbind_design, echo=TRUE}
-if (n.sv1 >= 1) {
-  i.design <- cbind(design, sv1$sv)
-  colnames(i.design) <- c(colnames(design), paste0("X", 
-                                                   1:ncol(sv1$sv)))
-}
-if (n.sv2 >= 1) {
-  i.design2 <- cbind(design2, sv2$sv)
-  colnames(i.design2) <- c(colnames(design2), 
-                           paste0("X", 1:ncol(sv2$sv)))
-}
+i.design <- cbind(design, sv1$sv)
+colnames(i.design) <- c(colnames(design), paste0("X", 
+                                                 1:ncol(sv1$sv)))
+i.design2 <- cbind(design2, sv2$sv)
+colnames(i.design2) <- c(colnames(design2), 
+                         paste0("X", 1:ncol(sv2$sv)))
+i.mod0 <- cbind(mod0, sv2$sv)
+colnames(i.design2) <- c(colnames(design2), 
+                         paste0("X", 1:ncol(sv2$sv)))
 ```
 We can observe how this adjustment has helped to uniform the p-values. As we would expect a uniform probability of each gene being differentially expressed.
 
 ```{r p-values-sva}
-if (n.sv2 >= 1) {
-  pValues <- f.pvalue(v1$E, i.design, design)
-  qValues <- p.adjust(pValues, method = "BH")
-  hist(qValues)
-}
-if (n.sv2 >= 1) {
-  pValues <- f.pvalue(v2$E, i.design2, design2)
-  qValues <- p.adjust(pValues, method = "BH")
-  hist(qValues)
-}
+pValues <- f.pvalue(v1$E, i.design, i.mod0)
+qValues <- p.adjust(pValues, method = "BH")
+hist(qValues, sub = "Using surrogate variables")
+
+pValues <- f.pvalue(v2$E, i.design2, i.mod0)
+qValues <- p.adjust(pValues, method = "BH")
+hist(qValues, sub = "Using surrogate variables")
 ```
 As we can see the surrogate variables, don't help to improve the data ajustment, because the distribution of the qValues is not uniform. We fit each design with the expression of the alcoholic liver disease:
 
@@ -223,7 +234,7 @@ fit.2 <- lmFit(v2$E, design2)
 
 #Contrasts
 
-We are interested in several comparisons, in the first design:
+ comparisons, in the first design:
 ```{r contrasts}
 contrasts0 <- makeContrasts(
   "ASHvsNormal" = ASH - Normal,
@@ -253,11 +264,11 @@ Given those comparisons of interest we now evaluate the results:
 ```{r contrast_fit}
 fit2 <- contrasts.fit(fit, contrasts0)
 fit2 <- eBayes(fit2)
-results <- decideTests(fit2, adjust.method = "fdr", lfc = log2(2))
+results <- decideTests(fit2, adjust.method = "BH", lfc = log2(2))
 summary(results)
 
 fit2.2 <- eBayes(fit.2) 
-results2 <- decideTests(fit2.2, adjust.method = "fdr", lfc = log2(2))
+results2 <- decideTests(fit2.2, adjust.method = "BH", lfc = log2(2))
 summary(results2)
 ```
 
@@ -297,7 +308,7 @@ save(fit, fit2, fit2.2, fit.2, design, design2, dge, ALD, contrasts0, v1, v2,
 ```
 
 #Differentially expressed genes
-
+## In stepwise manner
 We can plot the top 2000 genes with the highest absolute value of log fold-change in each contrast just for informative purposes:
 ```{r DEG_ALD, fig.width = 30, fig.height = 84}
 par(mfrow = c(ncol(contrasts0), 2))
@@ -308,6 +319,7 @@ out <- sapply(colnames(contrasts0), function(x) {
   hist(tt.ALD[1:2000, "logFC"], main = paste("Histogram of", x), xlab = "logFC")
 })
 ```
+## Progression
 For the progression model we can plot it too those top 2000 significative at the threshold of 0.05:
 ```{r DEG_ALD2, fig.width = 30, fig.height = 10 }
 par(mfrow = c(1, 2))
@@ -329,7 +341,32 @@ We stored all the table with `r nrow(tt.ALD2)` genes, even though some are not s
 over <- sum(signif[1:2000, "logFC"] > 0)
 ```
 These are the genes relevant of the alocholic liver disease progression. There are thus `r over` genes overexpressed in alcoholic liver disease and `r 2000 - over` downregulated in the alcoholic liver disease, which are the main contributers to the disease progression.
+However the most significant way to see if there is a progression is using another thest the Kendall test:
+### Kendall test
+This test check if a features has a constant grow or decrease among the samples, it is similar to a correlation test. 
+```{r kendall}
+library("Kendall")
+constant_change <- lapply(rownames(v2$E), function(x) {
+  Kendall(v2$E[x, ], design2[, "Progression"])})
+names(constant_change) <- rownames(v2$E)
+head(constant_change)
 
+# Extract the appropiate values
+kendall_tau <- sapply(constant_change, getElement, name = "tau")
+kendall_pvalue <- sapply(constant_change, getElement, name = "sl")
+
+# Store the names of the genes with a constant progression
+genes_progression <- names(kendall_tau[kendall_pvalue < 0.05])
+up <- names(kendall_tau[kendall_pvalue < 0.05 & kendall_tau > 0L])
+down <- names(kendall_tau[kendall_pvalue < 0.05 & kendall_tau < 0L])
+# Plot the histogram
+hist(kendall_tau[kendall_pvalue < 0.05], xlab = "tau", 
+     main = "Histogram of Kendall taus", 
+     sub = "Significant with a 0.05 threshold")
+```
+Those genes show a trend to increase or decrease with the progression of the disease. 
+
+# Venn diagrams
 We can also see which genes are differentially expressed in each phase, and which are shared:
 ```{r venn, fig.width = 30, fig.height = 15, collapse = TRUE}
 vennDiagram(results[, c(1:3, 6)], include = "up",
@@ -365,32 +402,49 @@ vennDiagram(results[, c(3, 6)], include = "down",
             main = "Genes Down-regulated")
 ```
 
+
 #Functional enrichment
-We can group genes by function using [geneSCF](http://genescf.kandurilab.org/), which is a program written in perl. As input it requires a list of genes with each line the name of the gene:
+We can check for functional enrichment, to see if those few significant genes are more related to performing certain functions and processes. I check for pathways using the Reactome data base and the process using Gene Ontologies.
 
-```{r geneSCF}
-fileConn <- file("genes_list.txt")
-writeLines(rownames(signif), fileConn)
-close(fileConn)
-```
-We run the program with the following command, we asume that there are 20000 genes in humans, and we group them by pathway in REACTOME:
-```{bash geneSCF2, eval = FALSE, include = TRUE}
-./geneSCF -m=normal -i=genes_list.txt -t=sym -db=REACTOME -o=. -bg=20000 -org=Hs -p=yes
-```
+## Reactome
+We can see in Reactome which pathways are enriched for those genes, that are significantly differentially expressed.
 
-##topGO 
-We can also group them by GO:
+```{r reactome, collapse=TRUE, fig.width = 20, fig.height = 20}
+library("ReactomePA")
+library("clusterProfiler")
+DEG_up <- mapIds(org.Hs.eg.db, keys = up, keytype = "SYMBOL", 
+                 column = "ENTREZID")
+DEG_down <- mapIds(org.Hs.eg.db, keys =  down, keytype = "SYMBOL",
+                   column = "ENTREZID")
+groups <- list(Up = DEG_up, Down = DEG_down)
+cc <- compareCluster(groups, fun = "enrichPathway")
+dotplot(cc)
+```
+We can observe differences in the comparison between genes up-regulated and dow-regulated. 
+But for a more general overview is better to see all the genes involved
+```{r reactome_all, fig.width = 20, fig.height = 20}
+DEG_names <- mapIds(org.Hs.eg.db, keys = genes_progression, 
+                    keytype = "SYMBOL", column = "ENTREZID")
+enrich <- enrichPathway(DEG_names, minGSSize = 2, maxGSSize = 2000)
+write.csv(as.data.frame(enrich), file = "Reactome_DR.csv", 
+          row.names = FALSE, na = "")
+dotplot(enrich)
+enrichMap(enrich, layout = igraph::layout_nicely,
+          vertex.label.cex = 1, n = 15)
+```
+Now we can observe which pathways are enriched with those genes, there is a functional difference between the genes up and down regulated. 
+
+## GO 
+We can observe in which biological process they are using topGO:
 ```{r topGO, error = TRUE, collapse = TRUE, fig.width = 20, fig.height = 40}
 library("topGO")
-allGenes <- tt.ALD2[, "adj.P.Val"]
-names(allGenes) <- rownames(tt.ALD2)
 topDiffGenes <- function(x) {
   return(x <= 0.05)
 }
 GOdata.bp <- new("topGOdata",
                  ontology = "BP",
                  description = "Biological process of the signature module.",
-                 allGenes = allGenes,
+                 allGenes = kendall_pvalue,
                  annot = annFUN.org,
                  ID = "symbol",
                  mapping = "org.Hs.eg",
