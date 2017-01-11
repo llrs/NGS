@@ -127,7 +127,7 @@ In this case each type of expression has come from a different subset of the liv
 design <- model.matrix(~0 + phenoData(DR)$G)
 colnames(design) <- c("NEG", "POS", "TOTAL")
 # Adding covariate of patient origin
-design <- cbind(design, "paired" = phenoData(DR)$paired) 
+# design <- cbind(design, "paired" = phenoData(DR)$paired) 
 design0 <- cbind("group" = as.numeric(phenoData(DR)$G), design[, 3, drop = FALSE])
 design
 ```
@@ -142,7 +142,7 @@ We can see that the adjusted value:
 library("sva")
 pValues <- f.pvalue(v$E, design, design0)
 qValues <- p.adjust(pValues, method = "BH")
-hist(qValues)
+hist(qValues, sub = "without using surrogate variables")
 ```
 As we can see, there is a peak in the low p-values for real differentially expressed genes.
 
@@ -165,7 +165,7 @@ We can check if now using the estimated surrogate variables makes the null hypot
 ```{r p-values-sva}
 pValues <- f.pvalue(v$E, i.design, i.design0)
 qValues <- p.adjust(pValues, method = "BH")
-hist(qValues)
+hist(qValues, sub = "Using surrogate variables")
 ```
 Even after adjusting for surrogate variables it doesn't improve the model. Maybe because we expect big differences between KRT+ and KRT- samples. 
 We fit the design with the expression of the ductular reaction, without taking into account the surrogate variables
@@ -187,7 +187,7 @@ contrasts
 ```{r contrast_fit}
 fit.2 <- contrasts.fit(fit, contrasts)
 fit.2 <- eBayes(fit.2)
-results.DR <- decideTests(fit.2, adjust.method = "fdr", lfc = log2(2))
+results.DR <- decideTests(fit.2, adjust.method = "BH", lfc = log2(2))
 summary(results.DR)
 ```
 
@@ -239,23 +239,47 @@ As we would expect, and it is not far from the max log fold-change `r max(signif
 
 ## Functional enrichment
 
+We can check for functional enrichment, to see if those few significant genes are more related to performing certain functions and processes. I check for pathways using the Reactome data base and the process using Gene Ontologies.
 
-We can check for functional enrichment, to see if those few significant genes are enriched in performing certain functions and process.
+### Reactome
+We can see in Reactome which pathways are enriched for those genes, that are significantly differentially expressed.
 
-### topGO 
-We can also group them by GO:
-```{r topGO, eval = TRUE, message = FALSE}
+```{r reactome, collapse=TRUE, fig.width = 20, fig.height = 40}
+library("ReactomePA")
+library("clusterProfiler")
+DEG_up <- mapIds(org.Hs.eg.db, keys = rownames(signif[signif$logFC > 0L, ]), 
+                 keytype = "REFSEQ", column = "ENTREZID")
+DEG_down <- mapIds(org.Hs.eg.db, keys = rownames(signif[signif$logFC < 0L, ]),
+                   keytype = "REFSEQ", column = "ENTREZID")
+groups <- list(Up = DEG_up, Down = DEG_down)
+cc <- compareCluster(groups, fun = "enrichPathway")
+dotplot(cc)
+```
+We can observe differences in the comparison between genes up-regulated and dow-regulated. 
+But for a more general overview is better to see all the genes involved
+```{r reactome_all, fig.width = 20, fig.height = 40}
+DEG_names <- mapIds(org.Hs.eg.db, keys = rownames(signif), 
+                    keytype = "REFSEQ", column = "ENTREZID")
+enrich <- enrichPathway(DEG_names, minGSSize = 2, maxGSSize = 2000)
+write.csv(as.data.frame(enrich), file = "Reactome_DR.csv", 
+          row.names = FALSE, na = "")
+dotplot(enrich)
+enrichMap(enrich, layout = igraph::layout_nicely,
+          vertex.label.cex = 1, n = 15)
+```
+Now we can observe which pathways are enriched with those genes, there is a functional difference between the genes up and down regulated. 
+
+### Gene Ontology
+We can see the enrichment in the genes ontologies using topGO package:
+```{r topGO, eval = TRUE, message = FALSE,  collapse = TRUE, fig.width = 20, fig.height = 20}
 library("topGO")
 allGenes <- tt.DR[, "adj.P.Val"]
 names(allGenes) <- rownames(tt.DR)
 topDiffGenes <- function(x) {
   return(x <= 0.05)
 }
-summary(topDiffGenes(allGenes))
-```
-As there is some problem with the topGO package, I need to map the ids using mapIds:
-```{r topGO2, error = TRUE, collapse = TRUE, fig.width = 20, fig.height = 40}
-idsMapping <- mapIds(org.Hs.eg.db, names(allGenes), "GO", keytype = "REFSEQ", multiVals = "list")
+idsMapping <- mapIds(org.Hs.eg.db, names(allGenes), "GO", keytype = "REFSEQ",
+                     multiVals = "list")
 GOdata.bp <- new("topGOdata",
                  ontology = "BP",
                  description = "Biological process of the signature module.",
@@ -268,8 +292,9 @@ resultFisher <- runTest(GOdata.bp, algorithm = "classic", statistic = "fisher")
 resultKS.weight <- runTest(GOdata.bp, algorithm = 'weight01', statistic = "ks")
 resultKS.elim <- runTest(GOdata.bp, algorithm = "elim", statistic = "ks")
 
-allRes <- GenTable(GOdata.bp, classic = resultFisher, weight01 = resultKS.weight,
-                   elim = resultKS.elim, orderBy = "weight01", topNodes = 1000)
+allRes <- GenTable(GOdata.bp, classic = resultFisher, 
+                   weight01 = resultKS.weight, elim = resultKS.elim, 
+                   orderBy = "weight01", topNodes = 1000)
 allRes <- allRes[allRes$weight01 < 0.05, ]
 write.csv(allRes, file = "GO_DR_progression.csv", row.names = FALSE)
 head(allRes)
