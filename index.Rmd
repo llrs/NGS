@@ -21,7 +21,7 @@ Obtain the ductular reaction signature of the top positive differentially expres
   
 ## Alcoholic liver disease signature
 
-Obtain the alcoholic liver disease signature of the progression of the disease: the differentially expressed genes. You can find the analysis performed [here](Alcoholic_disease.html).
+Obtain the alcoholic liver disease signature of the progression of the disease. You can find the analysis performed [here](Alcoholic_disease.html).
 
 ## Networks
   1. Use [WGCNA](https://labs.genetics.ucla.edu/horvath/CoexpressionNetwork/Rpackages/WGCNA/) to build the co-expressed genes of the alcoholic liver disease. And test the enrichment in the modules with the singature of the ductular reaction.  
