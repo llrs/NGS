@@ -13,11 +13,17 @@ output:
 BiocStyle::markdown()
 knitr::opts_chunk$set(tidy = FALSE, echo = TRUE, cache = TRUE, autodep = TRUE)
 ```
-This is part of a bigger study you can find [here](index.html)
 
+# Introduction
+
+Alcoholic liver disease is considered to start with Alcoholic steathosis which then develop further to cirrhosis, which is usually compensated, but sometimes it descompensates. Later on, either compensated or descompensated cirrhosis develops into alcoholic hepatitis which is usually classified as mild and severe. Those with severe hepatitis might respond to current treatments or not.
+Sometimes also an explant of a healthy liver is given to those patients with a bad short prognosis. 
+
+Other publications have studied differences between each state, therefore here we will analyse the disease as whole, those genes that show constant pattern in the progression of the disease. This analysis, is part of a bigger study you can find [here](index.html), is focused on finding those genes that reflect those progression of the disease. 
 
 # Load disease expression
 
+The starting point is a dataset of RNA-seq of several patients liver.
 The expression data is provided as counts in a tab separate value format. In another file there is the phenoData associated to the samples.
 
 ```{r load}
@@ -181,6 +187,7 @@ We can observe how good they behave
 ```{r sva-load}
 library("sva")
 mod0 <- matrix(1, nrow = nrow(design))
+colnames(mod0) <- "Intercept"
 ```
 
 ```{r p-values}
@@ -319,6 +326,7 @@ out <- sapply(colnames(contrasts0), function(x) {
   hist(tt.ALD[1:2000, "logFC"], main = paste("Histogram of", x), xlab = "logFC")
 })
 ```
+
 ## Progression
 For the progression model we can plot it too those top 2000 significative at the threshold of 0.05:
 ```{r DEG_ALD2, fig.width = 30, fig.height = 10 }
@@ -340,8 +348,11 @@ We stored all the table with `r nrow(tt.ALD2)` genes, even though some are not s
 ```{r signif, echo = FALSE}
 over <- sum(signif[1:2000, "logFC"] > 0)
 ```
+
 These are the genes relevant of the alocholic liver disease progression. There are thus `r over` genes overexpressed in alcoholic liver disease and `r 2000 - over` downregulated in the alcoholic liver disease, which are the main contributers to the disease progression.
 However the most significant way to see if there is a progression is using another thest the Kendall test:
+
+
 ### Kendall test
 This test check if a features has a constant grow or decrease among the samples, it is similar to a correlation test. 
 ```{r kendall}
@@ -354,6 +365,15 @@ head(constant_change)
 # Extract the appropiate values
 kendall_tau <- sapply(constant_change, getElement, name = "tau")
 kendall_pvalue <- sapply(constant_change, getElement, name = "sl")
+kendall_D <- sapply(constant_change, getElement, name = "D")
+kendall_varS <- sapply(constant_change, getElement, name = "varS")
+
+library("org.Hs.eg.db")
+nam <- mapIds(org.Hs.eg.db, keys = names(constant_change), keytype = "SYMBOL", column = "GENENAME")
+kendall <- cbind("Symbol" = names(constant_change), "Name" = nam,
+                 "Tau" = kendall_tau, "p-value" = kendall_pvalue,
+                 "Denominator" = kendall_D, "var(S)" = kendall_varS)
+write.csv(kendall, file = "Kendall_ALD.csv", row.names = FALSE, na = "")
 
 # Store the names of the genes with a constant progression
 genes_progression <- names(kendall_tau[kendall_pvalue < 0.05])
@@ -364,7 +384,13 @@ hist(kendall_tau[kendall_pvalue < 0.05], xlab = "tau",
      main = "Histogram of Kendall taus", 
      sub = "Significant with a 0.05 threshold")
 ```
+
 Those genes show a trend to increase or decrease with the progression of the disease. 
+
+We can check how do the keratin family evolve in the progression:
+```{r}
+constant_change[grep("(KRT[0-9])", names(constant_change))]
+```
 
 # Venn diagrams
 We can also see which genes are differentially expressed in each phase, and which are shared:
@@ -402,7 +428,6 @@ vennDiagram(results[, c(3, 6)], include = "down",
             main = "Genes Down-regulated")
 ```
 
-
 #Functional enrichment
 We can check for functional enrichment, to see if those few significant genes are more related to performing certain functions and processes. I check for pathways using the Reactome data base and the process using Gene Ontologies.
 
@@ -436,7 +461,7 @@ Now we can observe which pathways are enriched with those genes, there is a func
 
 ## GO 
 We can observe in which biological process they are using topGO:
-```{r topGO, error = TRUE, collapse = TRUE, fig.width = 20, fig.height = 40}
+```{r topGO, error = TRUE, collapse = TRUE, fig.width = 20, fig.height = 20}
 library("topGO")
 topDiffGenes <- function(x) {
   return(x <= 0.05)
