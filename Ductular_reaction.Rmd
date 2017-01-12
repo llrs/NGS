@@ -12,13 +12,14 @@ output:
 ```{r setup, echo=FALSE, results="asis", message=FALSE}
 knitr::opts_chunk$set(tidy = FALSE, echo = TRUE, cache = TRUE, autodep = TRUE)
 ```
+
+# Introduction
+
+This data was extracted from a liver, the POS labels indicate that were extracted from a microdisection with KRT7 positive. NEG indicates that for the same microdisection those not stained for KRT7 where taken. TOTAL indicates that there is a mix of KRT7+ and KRT7- dyeing.
+
 This is part of a bigger study you can find [here](index.html)
 
-# Ductular Reaction
-
-This data was extracted from a liver, the POS labels indicate that were extracted from a microdisection with KRT7 positive. NEG indicates that for the same microdisection those not stained for KRT7 where taken. TOTAL indicates that there is a mix of KRT7+ and KRT7- dyeing. 
-
-## Load the data of ductular reaction
+# Load the data 
 
 ```{r load}
 phenoData <- read.csv("../data/ductular_reaction/PHENO_26_10_2015.csv", 
@@ -56,7 +57,7 @@ We can normalize the data to counts per millon of reads taking into account that
 ```{r cpm}
 logCPM <- cpm(dge, normalized.lib.sizes = TRUE, log = TRUE, prior.count = 3)
 ```
-## Check quality pre-normalizations
+# Check quality pre-normalizations
 We can observe the quality of the samples with a boxplot and the density of expressions:
 ```{r q_check, fig.width = 30, fig.height = 10}
 boxplot(logCPM, main = "Expression per sample", col = phenoData$G)
@@ -97,7 +98,7 @@ phenoData(DR) <- AnnotatedDataFrame(phenoData)
 DR
 ```
 
-## Check the normalizations applied 
+# Check the normalizations applied 
 We take advantatge of the plotMDS function of limma package to plot the MDS of the samples, to see how close are between them. 
 
 ```{r plotMDS, message=FALSE }
@@ -120,7 +121,7 @@ colnames(logCPM) <- rownames(phenoData(DR))
 ```
 We can see that some samples tend to be paired by the origin of their data.
 
-## Design
+# Design
 In this case each type of expression has come from a different subset of the liver, so we should consider each one as an independent group. We also add as covariate the patient from where each sample was obtained.
 ```{r design}
 # Grouping by sample origin
@@ -128,7 +129,8 @@ design <- model.matrix(~0 + phenoData(DR)$G)
 colnames(design) <- c("NEG", "POS", "TOTAL")
 # Adding covariate of patient origin
 # design <- cbind(design, "paired" = phenoData(DR)$paired) 
-design0 <- cbind("group" = as.numeric(phenoData(DR)$G), design[, 3, drop = FALSE])
+design0 <- matrix(1, nrow = nrow(design))
+colnames(design0) <- "Intercept"
 design
 ```
 
@@ -146,7 +148,7 @@ hist(qValues, sub = "without using surrogate variables")
 ```
 As we can see, there is a peak in the low p-values for real differentially expressed genes.
 
-## Estimate surrogate variables
+# Estimate surrogate variables
 We can estimate surrogate variables with the function sva:
 ```{r sva, message = FALSE}
 sv <- sva(v$E, design, design0, method = "irw")
@@ -174,7 +176,7 @@ We fit the design with the expression of the ductular reaction, without taking i
 fit <- lmFit(v$E, design)
 ```
 
-## Contrasts
+# Contrasts
 We are interested in the Positive vs Negative comparison, but we can compute others too:
 ```{r comp}
 contrasts <- makeContrasts("PosVsNeg" = POS - NEG,
@@ -202,14 +204,14 @@ out <- sapply(colnames(results.DR), function(x){
 })
 ```
 
-## Store the data
+# Store the data
 
 We store the data in case we need it:
 ```{r store_DR}
 save(fit, fit.2, design, logCPM, DR, contrasts, file = "DR.RData")
 ```
 
-## Differentially expressed genes
+# Differentially expressed genes
 ```{r DEG_RD, fig.width = 14, fig.height = 30 }
 tt.DR <- topTable(fit.2, coef = "PosVsNeg", sort.by = "logFC", number = Inf)
 tt.DR <- tt.DR[order(-abs(tt.DR$logFC)), ] # Ordered by the absolute value of logFC
@@ -225,7 +227,8 @@ In order to store them we use the symbols, somehow a little bit more informative
 ```{r RD_tt}
 library("org.Hs.eg.db")
 symb <- mapIds(org.Hs.eg.db, keys = rownames(tt.DR), keytype = "REFSEQ", column = "SYMBOL")
-DEG <- cbind("Symbol" = symb, tt.DR)
+nam <- mapIds(org.Hs.eg.db, keys = rownames(tt.DR), keytype = "REFSEQ", column = "GENENAME")
+DEG <- cbind("Symbol" = symb, "Name" = nam, tt.DR)
 write.csv(DEG, file = "DR_PosVsNeg.csv", na = "", row.names = FALSE)
 ```
 We stored all the table with `r nrow(DEG)` genes, even though some are not significant and there might be some sequences that come from the same gene but with a different messenger. 
@@ -237,14 +240,14 @@ DEG[grep("(KRT[0-9])", DEG$Symbol), ]
 
 As we would expect, and it is not far from the max log fold-change `r max(signif$logFC)`, in fact is the `r match("KRT7", DEG$Symbol)`th gene more over-expressed.
 
-## Functional enrichment
+# Functional enrichment
 
 We can check for functional enrichment, to see if those few significant genes are more related to performing certain functions and processes. I check for pathways using the Reactome data base and the process using Gene Ontologies.
 
-### Reactome
+## Reactome
 We can see in Reactome which pathways are enriched for those genes, that are significantly differentially expressed.
 
-```{r reactome, collapse=TRUE, fig.width = 20, fig.height = 40}
+```{r reactome, collapse=TRUE, fig.width = 20, fig.height = 20}
 library("ReactomePA")
 library("clusterProfiler")
 DEG_up <- mapIds(org.Hs.eg.db, keys = rownames(signif[signif$logFC > 0L, ]), 
@@ -257,7 +260,7 @@ dotplot(cc)
 ```
 We can observe differences in the comparison between genes up-regulated and dow-regulated. 
 But for a more general overview is better to see all the genes involved
-```{r reactome_all, fig.width = 20, fig.height = 40}
+```{r reactome_all, fig.width = 20, fig.height = 20}
 DEG_names <- mapIds(org.Hs.eg.db, keys = rownames(signif), 
                     keytype = "REFSEQ", column = "ENTREZID")
 enrich <- enrichPathway(DEG_names, minGSSize = 2, maxGSSize = 2000)
@@ -269,7 +272,7 @@ enrichMap(enrich, layout = igraph::layout_nicely,
 ```
 Now we can observe which pathways are enriched with those genes, there is a functional difference between the genes up and down regulated. 
 
-### Gene Ontology
+## Gene Ontology
 We can see the enrichment in the genes ontologies using topGO package:
 ```{r topGO, eval = TRUE, message = FALSE,  collapse = TRUE, fig.width = 20, fig.height = 20}
 library("topGO")
