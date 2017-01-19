@@ -24,14 +24,26 @@ Obtain the ductular reaction signature of the top positive differentially expres
 Obtain the alcoholic liver disease signature of the progression of the disease. You can find the analysis performed [here](Alcoholic_disease.html).
 
 ## Networks
-  1. Use [WGCNA](https://labs.genetics.ucla.edu/horvath/CoexpressionNetwork/Rpackages/WGCNA/) to build the co-expressed genes of the alcoholic liver disease. And test the enrichment in the modules with the singature of the ductular reaction.  
-  [Here](Network.html) you can find the steps to prepare for WGCNA, but the code used is on the [TFM repository](https://github.com/llrs/TFM)
-  2. Test with a GSA if in the genes differentially expressed in the disease are enriched in the singature of the ductular reaction. The GSEA has been performed with the same code base of the TFM repository.
+
+We want to find the co-expressed genes of the alcoholic liver disease we will use [WGCNA](https://labs.genetics.ucla.edu/horvath/CoexpressionNetwork/Rpackages/WGCNA/) in case it is not in the genes differentially expressed between each state. 
+
+[Here](Network.html) you can find the steps to prepare for WGCNA, but the code used to build the cluster of genes is on a [repository](https://github.com/llrs/TFM).
+
+## Enrichment
+
+To evaluate the influence of the ductular reaction in the groups of genes with similar patterns of expression we will test them for an enrichment in the top differentially expressed genes of the ductular reaction.
+
+To evaluate if genes identified as continously increasing or decreasing with the progression of the disease are involved with the ductular reaction a GSEA will be performed using each group as gene set to test in the ductular reaction signature.
+
+[Here](GSEA.html) are the steps done to evaluate those enrichments.
 
 ## BioCor
 
-Test if [BioCor](https://github.com/llrs/BioCor) works better grouping genes by functionallity. This is a new package under development.
+The network building step is relaying only on the expression of the samples. Using available information about the pathways each gene is involved could help to relate better the genes. Under such idea a new package is under development to calculate the (functional) similarities between genes. Such similarities are already studied for GO (see [GOSemSim](https://github.com/GuangchuangYu/GOSemSim)), but are not studied for pathways. 
 
+The new package [BioCor](https://github.com/llrs/BioCor) calculates a similarity value between genes based on the pathway information of [Reactome](http://www.reactome.org/) and [Kegg](http://www.genome.jp/kegg/) databases.
+
+In order to make the networks of genes more accurate to the pathways test if including such information groups better genes by functionallity. 
 
 # SessionInfo
 
