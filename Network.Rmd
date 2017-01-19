@@ -13,6 +13,11 @@ output:
 knitr::opts_chunk$set(tidy = FALSE, echo = TRUE, cache = TRUE, autodep = TRUE)
 ```
 
+# Introduction
+
+This is the preparation of the datasets and data to use [WGCNA](https://labs.genetics.ucla.edu/horvath/CoexpressionNetwork/Rpackages/WGCNA/) to build the co-expressed genes of the alcoholic liver disease. 
+You can find the other steps of the study [here](index.html).
+
 # Load data
 We start from the expression data we previously normalized for the differential gene expression analysis.
 ```{r load, collapse = TRUE}
@@ -23,16 +28,24 @@ library("WGCNA")
 Of the second file we are only interested in the design2 object.
 
 # Filtering
-Firt we convert it to the format WGCNA requires (each row a sample, each column a gene). We
+Firt we convert it to the format WGCNA requires (each row a sample, each column a gene).
 ```{r transpose}
 data.wgcna <- t(v1$E)
 vclin0 <- design2[, "Progression", drop = FALSE]
 ```
-We will make a network of the whole disease, another for the early steps from Normal to compensated cirrhosis and from non-severe alcoholic hepatitis to severe alcoholic hepatitis.
+We will make several data sets:
+
+ - To see if there is a group of genes co-expressed among all the samples a data set with all the data from, normal to severe alcoholic hepatitis.
+ - To observe the co-expression in the early early steps of the disease we will make a data set from compensated cirrhosis and alcoholic steathosis heaptitis samples.
+ - To observe the co-expression in the late steps of the alcohol liver disease we store a data set from non-severe alcoholic hepatitis to severe alcoholic hepatitis samples. 
+ - To observe if there are co-expressed genes in the disease, another data set with all the patients from alcoholic steathosis to severe hepatitis.
+ 
 ```{r filter}
-early.patients <- phenoData$Status %in% c("ASH", "C.Comp", "Normal")
+early.patients <- phenoData$Status %in% c("ASH", "C.Comp")
+late.patients <- phenoData$Status %in% c("AH", "Responders", "Non-responders")
 early.ALD <- data.wgcna[early.patients, ]
-late.ALD <- data.wgcna[!early.patients, ]
+late.ALD <- data.wgcna[late.patients, ]
+patients <- data.wgcna[late.patients | early.patients, ]
 ```
 
 # Check data
@@ -80,11 +93,14 @@ explore(data = v1$E, file = "Whole_set.pdf", outcome = phenoData$Status,
 
 early.vclin <- vclin0[rownames(phenoData) %in% rownames(early.ALD), , drop = FALSE]
 explore(data = t(early.ALD), file = "Early_ALD.pdf", 
-        outcome = phenoData$Status[30:60], col = colors[30:60])
+        outcome = phenoData$Status[30:50], col = colors[30:50])
 
 late.vclin <- vclin0[rownames(phenoData) %in% rownames(late.ALD), , drop = FALSE]
 explore(data = t(late.ALD), file = "Late_ALD.pdf", outcome = phenoData$Status[1:29],
         col = colors[1:29])
+patients.vclin <- late.vclin <- vclin0[rownames(phenoData) %in% rownames(late.ALD), , drop = FALSE]
+explore(data = t(patients), file = "patients.pdf", outcome = phenoData$Status[1:50],
+        col = colors[1:50])
 
 d <- dists(v1$E)
 PCA.graph(d, phenoData$Status)
@@ -94,9 +110,10 @@ As we can see on the MDS (and others not shown, but stored in the files) the dat
 
 ```{r outlier}
 data.wgcna <- data.wgcna[!"E49" == rownames(data.wgcna), ]
+patients <- patients[!"E49" == rownames(patients), ]
 early.ALD <- early.ALD[!"E49" == rownames(early.ALD), ]
 ```
-Now we can save the data ready for WGCNA
+We can store the data in the right format for a study with WGCNA.
 
 # Export
 For an easy use with the TFM repository that will be used I rename the objects and store them separately:
@@ -106,11 +123,11 @@ gsg <- goodSamplesGenes(data.wgcna)
 data.wgcna <- data.wgcna[gsg$goodSamples, gsg$goodGenes]
 save(data.wgcna, vclin, file = "Whole_Network.RData")
 ```
-We can check that the whole data cohort has `r nrow(data.wgcna)` samples and `r sum(gsg$goodGenes)` genes have non zero variance.
+We can check that the whole data cohort has `r nrow(data.wgcna)` samples and `r sum(gsg$goodGenes)` genes have non zero variance. 
 ```{r export2}
 gsg <- goodSamplesGenes(early.ALD)
 data.wgcna <- early.ALD[gsg$goodSamples, gsg$goodGenes]
-vclin <- early.vclin
+vclin <- early.vclin[!"E49" == rownames(early.vclin), , drop = FALSE]
 save(data.wgcna, vclin, file = "Early_Network.RData")
 ```
 The cohort of patients from the early state of the disease has `r nrow(data.wgcna)` samples and `r sum(gsg$goodGenes)` genes have non zero variance.
@@ -121,6 +138,13 @@ vclin <- late.vclin
 save(data.wgcna, vclin, file = "Late_Network.RData")
 ```
 So the remaining samples are `r nrow(data.wgcna)` patients and `r sum(gsg$goodGenes)` genes have non zero variance.
+
+```{r export4}
+gsg <- goodSamplesGenes(patients)
+data.wgcna <- patients[gsg$goodSamples, gsg$goodGenes]
+vclin <- patients.vclin[!"E49" == rownames(patients.vclin), , drop = FALSE]
+save(data.wgcna, vclin, file = "patients.RData")
+```
 
 We have enough samples to build a robust network with WGCNA for each network. See the first [FAQ](https://labs.genetics.ucla.edu/horvath/CoexpressionNetwork/Rpackages/WGCNA/faq.html) answer.
 
