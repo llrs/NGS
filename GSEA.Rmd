@@ -1,0 +1,113 @@
+---
+title: "Weight of ductular reaction"
+author: "[Lluís Revilla](mailto:lrevilla@clinic.cat)"
+date: "`r Sys.Date()`"
+output:
+  BiocStyle::html_document:
+    toc: true
+  BiocStyle::pdf_document:
+    toc: true
+---
+
+```{r setup, echo=FALSE, results="asis", message=FALSE}
+knitr::opts_chunk$set(tidy = FALSE, echo = TRUE, cache = TRUE, autodep = TRUE)
+```
+
+# Introduction
+
+To evaluate the weight of the ductular reaction in the steps, we will perform a Gene Set Analysis using the top differentially expressed genes of the ductular reaction on the alcoholic liver disease progression and in the networks build.
+
+To evaluate the relationship of the genes that increase or decrease the expression along the progression of disease with the ductular reaction, we will perform a GSEA on the top differentially expressed genes.
+
+# Ductular reaction in co-expressed genes
+
+
+```{r load_DR}
+DR <- read.csv("DR_PosVsNeg.csv")
+FC <- DR$logFC
+names(FC) <- DR$Symbol
+FC <- FC[DR$adj.P.Val < 0.05]
+FC <- FC[!duplicated(names(FC))]
+FC <- sort(FC, decreasing = TRUE)
+pFC <- FC[DR$logFC > 0 & DR$adj.P.Val < 0.05]
+nFC <- FC[DR$logFC < 0 & DR$adj.P.Val < 0.05]
+```
+
+## Early states of ALD
+
+```{r}
+library("limma")
+```
+
+## Late states of ALD
+
+# Ductular reaction in progressive genes of ALD
+This step is to evaluate the weight of the ductular reaction in the alcoholic liver disease progression. 
+
+```{r load_kendall}
+kendall <- read.csv("Kendall_ALD.csv")
+K <- kendall$Tau
+names(K) <- kendall$Symbol
+K <- sort(K, decreasing = TRUE)
+K <- K[kendall$p.value < 0.05]
+index1 <- ids2indices(names(pFC), names(K))$Set1
+index2 <- ids2indices(names(nFC), names(K))$Set1
+barcodeplot(K, index = index1, index2 = index2, quantiles = c(-0.3, 0.3),
+            labels = c("Increasing", "Decreasing"), 
+            main = "Fold change in the progression")
+index <- ids2indices(names(FC), names(K))$Set1
+barcodeplot(K, index = index, labels = c("Increasing", "Decreasing"),
+            quantiles = c(-0.3, 0.3))
+```
+
+## DR over-expressed in the progression of ALD
+
+```{r}
+barcodeplot(K, index = index1, labels = c("Increasing", "Decreasing"), 
+            main = "Over-expressed genes of the DR in the progression", 
+            col.bars = "red", quantiles = c(-0.3, 0.3))
+```
+
+## DR under-expressed in the progression of ALD
+
+```{r}
+barcodeplot(K, index = index2, labels = c("Increasing", "Decreasing"), 
+            main = "Under expressed genes of the DR in the progression", 
+            col.bars = "blue", quantiles = c(-0.3, 0.3))
+```
+
+# Progressive genes in the ductular reaction
+
+```{r}
+increasing <- K > 0.5
+decreasing <- K < -0.5
+
+index1 <- ids2indices(names(K[increasing]), names(FC))$Set1
+index2 <- ids2indices(names(K[decreasing]), names(FC))$Set1
+barcodeplot(FC, index = index1, index2 = index2, 
+            main = "Progression in ductular reaction")
+index <- ids2indices(names(K), names(FC))$Set1
+barcodeplot(FC, index = index)
+```
+
+
+## Increasing expression with the progression of ALD
+```{r}
+barcodeplot(FC, index = index1, col.bars = "red", quantiles = c(-1.5, 1.5),
+            main = "Increasingly expressed in the progression in the DR")
+```
+
+
+## Decreasing expression with the progression of ALD
+```{r}
+barcodeplot(FC, index = index2, col.bars = "blue", quantiles = c(-1.5, 1.5),
+            main = "Decreasingly expressed in the progression in the DR")
+```
+
+
+# SessionInfo
+
+```{r}
+sessionInfo()
+```
+
