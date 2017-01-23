@@ -208,7 +208,8 @@ out <- sapply(colnames(results.DR), function(x){
 
 We store the data in case we need it:
 ```{r store_DR}
-save(fit, fit.2, design, logCPM, DR, contrasts, file = "DR.RData")
+save(fit, fit.2, design, logCPM, DR, contrasts, v, dge, 
+     file = "DR.RData")
 ```
 
 # Differentially expressed genes
