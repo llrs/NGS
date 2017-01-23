@@ -19,91 +19,266 @@ To evaluate the weight of the ductular reaction in the steps, we will perform a 
 
 To evaluate the relationship of the genes that increase or decrease the expression along the progression of disease with the ductular reaction, we will perform a GSEA on the top differentially expressed genes.
 
-# Ductular reaction in co-expressed genes
-
-
-```{r load_DR}
-DR <- read.csv("DR_PosVsNeg.csv")
-FC <- DR$logFC
-names(FC) <- DR$Symbol
-FC <- FC[DR$adj.P.Val < 0.05]
-FC <- FC[!duplicated(names(FC))]
-FC <- sort(FC, decreasing = TRUE)
-pFC <- FC[DR$logFC > 0 & DR$adj.P.Val < 0.05]
-nFC <- FC[DR$logFC < 0 & DR$adj.P.Val < 0.05]
-```
-
-## Early states of ALD
+There are several ways to perform gene set enrichment analysis, it may be classified into the following categories:
+ - By the null hypothesis they are testing:
+   - Competitive: involves the genes inside and outside the gene set.
+   - Self-contained: involves only the genes inside the gene set.
+ - By whether enrichment score (ES) are calculated using phenotypes or not:
+   - Supervised: needs a phenotype to calculate the ES.
+   - Unsupervised: doesn't need the phenotype to calculate the ES.
+ - By the units that ES are quantifying:
+   - The entire sample population: each ES tells something about a gene set and the entire data set.
+   - Single sample: each ES tells something about a gene set and an individual sample.
+   
+Even more, the test can correct for interdependence (by correlation or other means) of the genes in the same gene set or not. 
+   
+We define a function to perform a simple (competitive, supervised, all samples, uncorrected) gene set enrichment analysis over any statistic:
 
 ```{r}
-library("limma")
+library("GSEABase") # To create gene sets and collections
+library("Category")
+library("org.Hs.eg.db")
+GSEA <- function(gsetcollection, statistic, identifiers = NULL, 
+                 method = "simple") {
+  if (is.null(names(statistic)) & !is.null(identifiers)) {
+    names(statistic) <- identifiers # It should be the same length 
+  } else if (is.null(names(statistic)) & is.null(identifiers)) {
+    stop("Identifiers are the name of the genes in the statistics, ",
+         "please provide them matching with the gset collection")
+  }
+  identifiers <- names(statistic)
+  if (length(statistic) != length(identifiers)) {
+    stop("The identifiers don't correspond to the statistic, check the length")
+  }
+  Im <- incidence(gsetcollection)
+  Im <- Im[, colnames(Im) %in% identifiers]
+  tGSgenes <- statistic[match(colnames(Im), identifiers)]
+  zS <- switch(method, 
+               simple = sqrt(rowSums(Im)) * (as.vector(Im %*% tGSgenes)/rowSums(Im)),
+               category = applyByCategory(tGSgenes, Im, function(x) {
+                 (sum((x - mean(x))^2) - (length(x) - 1))/(2 * (length(x) - 1))
+               })
+  )
+  zS <- sort(abs(zS), decreasing = TRUE)
+  # We assume that the scores follow a normal distribution
+  pv <- pmin(pnorm(zS), 1 - pnorm(zS)) 
+  # pv <- p.adjust(pv, method = "fdr")
+  as.data.frame(cbind("zScore" = zS, "p-value" = pv))
+}
 ```
 
-## Late states of ALD
+# Gene Sets of co-expressed genes
 
-# Ductular reaction in progressive genes of ALD
-This step is to evaluate the weight of the ductular reaction in the alcoholic liver disease progression. 
+## Early stages of ALD
+
+We can load the groups of genes co-expressed in the early stage of the disease:
+```{r}
+library("limma")
+load("Early_Network/unsigned_signed/modules_ME.RData", verbose = TRUE)
+load("Early_Network.RData", verbose = TRUE)
+early_modules <- moduleColors
+names(early_modules) <- colnames(data.wgcna)
+
+# Make a collection with where each geneSet is a module
+gsc_early <- GeneSetCollection(sapply(unique(early_modules), function(x) {
+  GeneSet(names(early_modules[early_modules == x]), 
+          setName = paste("early", x, sep = "_"),
+          geneIdType = SymbolIdentifier("org.Hs.eg.db"))
+}))
+```
+
+## Late stages of ALD
+
+We can load the groups of genes co-expressed in the late statge of the disease:
+```{r}
+load("Late_Network/unsigned_signed/modules_ME.RData", verbose = TRUE)
+# load("Late_Network.RData", verbose = TRUE) # Same order of genes!
+late_modules <- moduleColors
+names(late_modules) <- colnames(data.wgcna)
+# Make a collection with each geneSet a module
+gsc_late <- GeneSetCollection(sapply(unique(late_modules), function(x) {
+  GeneSet(names(late_modules[late_modules == x]), 
+          setName = paste("late", x, sep = "_"),
+          geneIdType = SymbolIdentifier("org.Hs.eg.db"))
+}))
+```
+
+# Enrichment in ALD progression
+
+To evaluate the weight of the ductular reaction in the alcoholic liver disease progression we load the genes with a progression of the expression in the disease and we use them to build the gene sets. One gene set for the ones that increase and another for the ones which decrease:
 
 ```{r load_kendall}
 kendall <- read.csv("Kendall_ALD.csv")
 K <- kendall$Tau
 names(K) <- kendall$Symbol
-K <- sort(K, decreasing = TRUE)
-K <- K[kendall$p.value < 0.05]
-index1 <- ids2indices(names(pFC), names(K))$Set1
-index2 <- ids2indices(names(nFC), names(K))$Set1
-barcodeplot(K, index = index1, index2 = index2, quantiles = c(-0.3, 0.3),
+K.ok <- sort(K, decreasing = TRUE)
+K.ok <- K[kendall$p.value < 0.05]
+increasing <- K.ok > 0.5
+decreasing <- K.ok < -0.5
+
+gs_iK <- GeneSet(unique(names(K.ok[increasing])))
+setName(gs_iK) <- "Increasing_K"
+gs_dK <- GeneSet(unique(names(K.ok[decreasing])))
+setName(gs_dK) <- "Decreasing_K"
+gsc_K <- GeneSetCollection(gs_iK, gs_dK)
+gsc_K <- mapIdentifiers(gsc_K, SymbolIdentifier("org.Hs.eg.db"))
+```
+
+We load the [previously](Ductular_reaction.html) calculated differentially expressed genes in the ductular reaction:
+
+```{r load_DR}
+DR <- read.csv("DR_PosVsNeg.csv")
+FC <- DR$logFC
+names(FC) <- DR$Symbol
+FC <- FC[!duplicated(names(FC))]
+FC <- sort(FC, decreasing = TRUE)
+pFC <- FC[DR$logFC > 0 & DR$adj.P.Val < 0.05]
+nFC <- FC[DR$logFC < 0 & DR$adj.P.Val < 0.05]
+
+gs_pFC <- GeneSet(unique(names(pFC)))
+setName(gs_pFC) <- "Positive_FC"
+gs_nFC <- GeneSet(unique(names(nFC)))
+setName(gs_nFC) <- "Negative_FC"
+gsc_FC <- GeneSetCollection(gs_pFC, gs_nFC)
+gsc_FC <- mapIdentifiers(gsc_FC, SymbolIdentifier("org.Hs.eg.db"))
+```
+We can observe where are the genes differentially expressed in the ductular reaction compared to the progressive expression of the genes in the disease:
+
+```{r, include=FALSE}
+index <- ids2indices(geneIds(gsc_FC), names(K))
+barcodeplot(K, index = index[[1]], 
+            index2 = index[[2]],
             labels = c("Increasing", "Decreasing"), 
             main = "Fold change in the progression")
-index <- ids2indices(names(FC), names(K))$Set1
-barcodeplot(K, index = index, labels = c("Increasing", "Decreasing"),
-            quantiles = c(-0.3, 0.3))
 ```
 
 ## DR over-expressed in the progression of ALD
 
+The sets extracted from the ductular reaction are 
 ```{r}
-barcodeplot(K, index = index1, labels = c("Increasing", "Decreasing"), 
+simple_K <- GSEA(gsc_FC, K)
+head(simple_K)
+simple_K <- GSEA(gsc_FC, kendall$p.value, kendall$Symbol)
+head(simple_K)
+complex_K <- GSEA(gsc_FC, K, method = "category")
+head(complex_K)
+complex_K <- GSEA(gsc_FC, kendall$p.value, kendall$Symbol, method = "category")
+head(complex_K)
+complex_K[complex_K$`p-value` < 0.05, ]
+
+barcodeplot(K, index = index[[1]], labels = c("Increasing", "Decreasing"), 
             main = "Over-expressed genes of the DR in the progression", 
-            col.bars = "red", quantiles = c(-0.3, 0.3))
+            col.bars = "red", quantiles = c(-0.3, 0.3), sub = "(tau)")
 ```
+
+As we can observe the genes over-expressed in the ductular reaction are not enriched in the increase of the expression.
 
 ## DR under-expressed in the progression of ALD
 
+We can plot again the under-expressed genes compared to the Tau statistic
+
 ```{r}
-barcodeplot(K, index = index2, labels = c("Increasing", "Decreasing"), 
+barcodeplot(K, index = index[[2]], labels = c("Increasing", "Decreasing"), 
             main = "Under expressed genes of the DR in the progression", 
-            col.bars = "blue", quantiles = c(-0.3, 0.3))
+            col.bars = "blue", quantiles = c(-0.3, 0.3), sub = "(tau)")
 ```
 
-# Progressive genes in the ductular reaction
+As we can observe the genes under-expressed in the ductular reaction are not enriched in the increase of the expression.
+
+# Enrichment in the ductular reaction
+
+We can observe the enrichment in the ductular reaction of the previous gene sets. 
+Assuming the independence of the genes in each data set:
+```{r}
+gs1 <- GeneSetCollection(c(gsc_K, gsc_late, gsc_early))
+gs1 <- mapIdentifiers(gs1, SymbolIdentifier("org.Hs.eg.db"))
+simple <- GSEA(gs1, DR$t, DR$Symbol)
+head(simple)
+simple <- GSEA(gs1, FC)
+head(simple)
+complex <- GSEA(gs1, DR$t, DR$Symbol, method = "category")
+head(complex)
+complex[complex$`p-value` < 0.05, ]
+complex <- GSEA(gs1, FC, method = "category")
+complex[complex$`p-value` < 0.05, ]
+```
+
+Assuming there is some correlation between the genes in each gene set:
 
 ```{r}
-increasing <- K > 0.5
-decreasing <- K < -0.5
+library("GSVAdata") # To obtain sets from the Kegg, and reactome database
 
-index1 <- ids2indices(names(K[increasing]), names(FC))$Set1
-index2 <- ids2indices(names(K[decreasing]), names(FC))$Set1
-barcodeplot(FC, index = index1, index2 = index2, 
-            main = "Progression in ductular reaction")
-index <- ids2indices(names(K), names(FC))$Set1
-barcodeplot(FC, index = index)
+gsc_K <- mapIdentifiers(gsc_K, RefseqIdentifier("org.Hs.eg.db"))
+data(c2BroadSets)
+c2BroadSets <- c2BroadSets[c(grep("^KEGG", names(c2BroadSets)),
+                             grep("^REACTOME", names(c2BroadSets)), 
+                             grep("^BIOCARTA", names(c2BroadSets)))]
+x <- sapply(geneIds(c2BroadSets), length)
+c2BroadSets <- c2BroadSets[x > 10L]
+c2BroadSets <- mapIdentifiers(c2BroadSets, RefseqIdentifier("org.Hs.eg.db"))
+gsc_late <- mapIdentifiers(gsc_late, RefseqIdentifier("org.Hs.eg.db"))
+gsc_early <- mapIdentifiers(gsc_early, RefseqIdentifier("org.Hs.eg.db"))
+gs <- GeneSetCollection(c(c2BroadSets, gsc_K, gsc_late, gsc_early))
+
+load("DR.RData", verbose = TRUE) # Load the expression 
+index <- ids2indices(geneIds(gs), rownames(v$E))
+# competitive, supervised, all samples, corrected
+c_gs <- camera(v$E, index, design, c(-1, 1, 0), allow.neg.cor = TRUE)
+write.csv(c_gs, file = "Camera_PosVsNeg.csv", row.names = TRUE)
+
+# competitive, supervised, all samples, uncorrected
+r_gs <- romer(v$E, index, design, c(-1, 1, 0))
+write.csv(r_gs, file = "romer_in_DR.csv", row.names = TRUE)
+
+g_gst <- sapply(index, geneSetTest, FC)
+write.csv(g_gst, file = "geneSetTest_mixed_PosVsNeg.csv")
+
+# self-contained, supervised, all samples, uncorrected
+rst_gs <- roast(v$E, index, design, c(-1, 1, 0), set.estatistic = "msq")
+write.csv(rst_gs, file = "roast_PosVsNeg.csv")
 ```
 
+Using single sample test like GSVA we can calculate the difference of the expression of a gene set between samples :
 
-## Increasing expression with the progression of ALD
 ```{r}
-barcodeplot(FC, index = index1, col.bars = "red", quantiles = c(-1.5, 1.5),
-            main = "Increasingly expressed in the progression in the DR")
+library("GSVA") # To perform a variation set analysis.
+load("DR.RData", verbose = TRUE)
+GSexpr <- gsva(exprs(DR), gs, rnaseq = TRUE, min.sz = 5, verbose = FALSE)
+fit3 <- lmFit(GSexpr$es.obs, design)
+fit3.2 <- contrasts.fit(fit3, contrasts)
+fit3.2 <- eBayes(fit3.2)
+results.DR <- decideTests(fit3.2, adjust.method = "BH")
+summary(results.DR)
+tt <- topTable(fit3.2, coef = "PosVsNeg", number = Inf)
+tt <- tt[order(abs(tt$logFC), decreasing = TRUE), ]
+write.csv(tt, file = "setsFC_PosVsNeg.csv", row.names = TRUE)
+head(tt)
+
+# Select the new index based on which stage the gene sets where obtained
+gsc_e <- GeneSet(names(gsc_early), setName = "Early_network")
+gsc_l <- GeneSet(names(gsc_late), setName = "Late_network")
+gsc_network <- GeneSetCollection(gsc_e, gsc_l)
+index <- ids2indices(geneIds(gsc_network), rownames(tt))
+
+c_gs <- camera(GSexpr$es.obs, index, design, c(-1, 1, 0), 
+               allow.neg.cor = TRUE)
+write.csv(c_gs, file = "Camera_gs_PosVsNeg.csv", row.names = TRUE, )
+
+r_gs <- romer(GSexpr$es.obs, index, design, c(-1, 1, 0))
+write.csv(r_gs, file = "romer_gs_DR.csv", row.names = TRUE, )
+
+rst_gs <- roast(GSexpr$es.obs, index, design, c(-1, 1, 0))
+write.csv(rst_gs, file = "roast_gs_PosVsNeg.csv")
 ```
 
+We can further test if there is an enrichment in the gene sets from the late stages of the disease or from the early stages:
 
-## Decreasing expression with the progression of ALD
 ```{r}
-barcodeplot(FC, index = index2, col.bars = "blue", quantiles = c(-1.5, 1.5),
-            main = "Decreasingly expressed in the progression in the DR")
+barcodeplot(tt$t, index = index[[1]], index2 = index[[2]], 
+            main = "Early and Late networks in the DR", sub = "(t)")
+barcodeplot(tt$logFC, index = index[[1]], index2 = index[[2]], 
+            main = "Early and Late networks in the DR", sub = "(logFC)")
 ```
-
 
 # SessionInfo
 
