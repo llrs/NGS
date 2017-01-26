@@ -32,11 +32,12 @@ There are several ways to perform gene set enrichment analysis, it may be classi
    
 Even more, the test can correct for interdependence (by correlation) of the genes in the same gene set or not. 
    
-We define a function to perform a simple (competitive, supervised, all samples, uncorrected) gene set enrichment analysis over any statistic:
+We define a function to perform a simple (competitive, supervised, all samples, uncorrected) gene set enrichment analysis over any statistic, with two methods, one to detect change in the mean expression and another one to detect change in the scales (`method = "category"`):
 
 ```{r introduction}
 library("GSEABase") # To create gene sets and collections
 library("Category") # to use applyByCategory
+library("fgsea") # To make GSEAs like in the BROAD webpage
 library("org.Hs.eg.db") # To obtain annotation of human sequences
 GSEA <- function(gsetcollection, statistic, identifiers = NULL, 
                  method = "simple") {
@@ -54,16 +55,23 @@ GSEA <- function(gsetcollection, statistic, identifiers = NULL,
   Im <- Im[, colnames(Im) %in% identifiers]
   tGSgenes <- statistic[match(colnames(Im), identifiers)]
   zS <- switch(method, 
-               simple = sqrt(rowSums(Im)) * (as.vector(Im %*% tGSgenes)/rowSums(Im)),
+               # shifts in mean expression
+               simple = sqrt(rowSums(Im)) * (as.vector(Im %*% tGSgenes)/
+                                               rowSums(Im)),
+               # To detect change in scale
                category = applyByCategory(tGSgenes, Im, function(x) {
                  (sum((x - mean(x))^2) - (length(x) - 1))/(2 * (length(x) - 1))
                })
   )
   zS <- sort(abs(zS), decreasing = TRUE)
-  # We assume that the scores follow a normal distribution
+  # We assume that the scores follow a normal distribution in 
+  # a random group of genes
   pv <- pmin(pnorm(zS), 1 - pnorm(zS)) 
   a.pv <- p.adjust(pv, method = "fdr") # the same as BH
-  as.data.frame(cbind("zScore" = zS, "p-value" = pv, "FDR" = a.pv))
+  m <- cbind("zScore" = zS, "p-value" = pv, "FDR" = a.pv)
+  m <- m[order(m[, "FDR"], m[, "zScore"], m[, "p-value"],
+               decreasing = c(FALSE, TRUE, FALSE)), ]
+  as.data.frame(m)
 }
 ```
 
@@ -108,18 +116,16 @@ gsc_late <- GeneSetCollection(sapply(unique(late_modules), function(x) {
 To evaluate the weight of the ductular reaction in the alcoholic liver disease progression we load the [previously](Ductular_reaction.html) calculated differentially expressed genes in the ductular reaction:
 
 ```{r load_DR}
-DR <- read.csv("DR_PosVsNeg.csv")
-FC <- DR$logFC
-names(FC) <- DR$Symbol
+DRs <- read.csv("DR_PosVsNeg.csv")
+FC <- DRs$logFC
+names(FC) <- DRs$Symbol
 FC <- FC[!duplicated(names(FC))]
 FC <- sort(FC, decreasing = TRUE)
-pFC <- FC[DR$logFC > 0 & DR$adj.P.Val < 0.05]
-nFC <- FC[DR$logFC < 0 & DR$adj.P.Val < 0.05]
+pFC <- FC[DRs$logFC > 0 & DRs$adj.P.Val < 0.05]
+nFC <- FC[DRs$logFC < 0 & DRs$adj.P.Val < 0.05]
 
-gs_pFC <- GeneSet(unique(names(pFC)))
-setName(gs_pFC) <- "Positive_FC"
-gs_nFC <- GeneSet(unique(names(nFC)))
-setName(gs_nFC) <- "Negative_FC"
+gs_pFC <- GeneSet(unique(names(pFC)), setName = "Positive_FC")
+gs_nFC <- GeneSet(unique(names(nFC)), setName = "Negative_FC")
 gsc_FC <- GeneSetCollection(gs_pFC, gs_nFC)
 gsc_FC <- mapIdentifiers(gsc_FC, SymbolIdentifier("org.Hs.eg.db"))
 ```
@@ -134,7 +140,8 @@ K.ok <- K[kendall$p.value < 0.05]
 increasing <- K.ok > 0.5
 decreasing <- K.ok < -0.5
 
-library("GSVAdata") # To obtain sets from the Kegg, and Reactome database
+# We use the file downloaded from broad v5.2 
+# to obtain sets from the Kegg, Reactome database
 c2BroadSets <- getGmt("../data/c2.all.v5.2.symbols.gmt", SymbolIdentifier("org.Hs.eg.db"))
 c2BroadSets <- c2BroadSets[unique(c(grep("^KEGG", names(c2BroadSets)),
                                     grep("^REACTOME", names(c2BroadSets)), 
@@ -142,23 +149,61 @@ c2BroadSets <- c2BroadSets[unique(c(grep("^KEGG", names(c2BroadSets)),
                                     grep("LIVER", names(c2BroadSets)),
                                     grep("HEPATO", names(c2BroadSets))))]
 x <- sapply(geneIds(c2BroadSets), length)
-c2BroadSets <- c2BroadSets[x > 10L]
+c2BroadSets <- c2BroadSets[x > 20L] # To be able to test it with the GSEA function
 c2BroadSets <- mapIdentifiers(c2BroadSets, SymbolIdentifier("org.Hs.eg.db"))
 gsc_late <- mapIdentifiers(gsc_late, SymbolIdentifier("org.Hs.eg.db"))
 gsc_early <- mapIdentifiers(gsc_early, SymbolIdentifier("org.Hs.eg.db"))
 gs <- GeneSetCollection(c(c2BroadSets, gsc_late, gsc_early, gsc_FC))
 ```
 
-Once we have our gene sets we can calculate the score:
+
+Once we have our gene sets we can calculate the score, we don't need to calculate a scale shift in the tau statistic, so we just compare mean shift:
 
 ```{r gsea_K}
-simple_K <- GSEA(gs, K)
-write.csv(simple_K, "GSEA_simple_K.csv")
-head(simple_K)
-complex_K <- GSEA(gs, K, method = "category")
-write.csv(complex_K, "GSEA_category_K.csv")
-head(complex_K)
-complex_K[complex_K$`p-value` < 0.05, ]
+meanExpr_K <- GSEA(gs, K)
+write.csv(meanExpr_K, "GSEA_meanExpr_K.csv")
+head(meanExpr_K)
+
+fgseaRes <- fgsea(pathways = geneIds(gs), stats = K, minSize = 15, 
+                 maxSize = Inf, nperm = 10000)
+library("data.table") # To be able to store thd ata.table efficiently
+fwrite(fgseaRes, file = "fgsea_K.csv")
+topPathwaysUp <- fgseaRes[ES > 0 & padj < 0.05][
+  head(order(NES, padj, decreasing = c(TRUE, FALSE)), n = 10), pathway]
+topPathwaysDown <- fgseaRes[ES < 0 & padj < 0.05][
+  head(order(NES, pval), n = 10), pathway]
+topPathways <- c(topPathwaysUp, rev(topPathwaysDown))
+plotGseaTable(geneIds(gs)[topPathways], K, fgseaRes, gseaParam = 0.5)
+library("ggplot2")
+plotEnrichment(geneIds(gs[[topPathways[1]]]), K) +
+  ggtitle(topPathways[1])
+plotEnrichment(geneIds(gs[[topPathways[20]]]), K) +
+  ggtitle(topPathways[20])
+```
+We have calculated the enrichment using the scores 
+
+```{r piano}
+library("piano")
+GeneSetCollection2GSC <- function(gsc, addInfo = "none") {
+  GSC <- list("gsc" = geneIds(gsc), "addInfo" = addInfo)
+  class(GSC) <- "GSC"
+  return(GSC)
+}
+
+# Convert every value (pvalue and FC if uses direction) to a matrix!
+myPval <- DRs$adj.P.Val
+myPval <- as.matrix(myPval, ncol = 1)
+rownames(myPval) <- DRs$Symbol
+myFC <- DRs$logFC
+myFC <- as.matrix(myFC, ncol = 1)
+rownames(myFC) <- DRs$Symbol
+GS <- GeneSetCollection2GSC(gs)
+
+# Run the competitive, supervised, entire sample
+gsaRes <- runGSA(geneLevelStats = myPval, directions = myFC,
+                 gsc = GS, nPerm = 1000)
+gsaResTab <- GSAsummaryTable(gsaRes)
+write.csv(gsaResTab, file = "runGSA_FC.csv")
 ```
 
 As we can observe the genes over-expressed in the ductular reaction are not enriched in the increase of the expression. We can plot the under-expressed genes and over-expressed genes in the ductular reaction compared to the statistic:
@@ -166,10 +211,11 @@ As we can observe the genes over-expressed in the ductular reaction are not enri
 ```{r plot_FC_in_K}
 index <- ids2indices(geneIds(gs), names(K))
 
-barcodeplot(K, index = index[["Negative_FC"]], 
-            index2 = index[["Positive_FC"]],
-            labels = c("Increasing", "Decreasing"), sub = "(tau)",
-            main = "Fold change in the progression")
+plotEnrichment(geneIds(gs[["Negative_FC"]]), K) +
+  ggtitle("Negative FC in DR")
+
+plotEnrichment(geneIds(gs[["Positive_FC"]]), K) +
+  ggtitle("Positive FC in DR")
 ```
 
 # Enrichment in the ductular reaction
@@ -177,43 +223,102 @@ barcodeplot(K, index = index[["Negative_FC"]],
 We create gene sets of the genes with a progression of the expression in the disease and we use them to build the gene sets. One gene set for the ones that increase and another for the ones which decrease:
 
 ```{r K_sets}
-gs_iK <- GeneSet(unique(names(K.ok[increasing])))
-setName(gs_iK) <- "Increasing_K"
-gs_dK <- GeneSet(unique(names(K.ok[decreasing])))
-setName(gs_dK) <- "Decreasing_K"
+gs_iK <- GeneSet(unique(names(K.ok[increasing])), setName = "Increasing_K")
+gs_dK <- GeneSet(unique(names(K.ok[decreasing])), setName = "Decreasing_K")
 gsc_K <- GeneSetCollection(gs_iK, gs_dK)
 gsc_K <- mapIdentifiers(gsc_K, SymbolIdentifier("org.Hs.eg.db"))
+save(gs, gsc_K, gsc_early, gsc_late, meanExpr_K, K, DRs, FC, file = "Gene_sets.RData")
 ```
 
 We can observe the enrichment in the ductular reaction of the previous gene sets. 
 Assuming the independence of the genes in each data set:
 ```{r gsea_FC}
 gs <- GeneSetCollection(c(c2BroadSets, gsc_late, gsc_early, gsc_K))
-simple <- GSEA(gs, DR$t, DR$Symbol)
-write.csv(complex, "GSEA_simple_DR_t.csv")
-head(simple)
-simple <- GSEA(gs, DR$AveExpr, DR$Symbol)
-write.csv(complex, "GSEA_simple_DR_AveExpr.csv")
-head(simple)
-simple <- GSEA(gs, FC)
-write.csv(complex, "GSEA_simple_DR_logFC.csv")
-head(simple)
-complex <- GSEA(gs, DR$t, DR$Symbol, method = "category")
-write.csv(complex, "GSEA_category_DR_t.csv")
-head(complex)
-simple <- GSEA(gs, DR$AveExpr, DR$Symbol, method = "category")
-write.csv(complex, "GSEA_category_DR_AveExpr.csv")
-head(simple)
-complex <- GSEA(gs, FC, method = "category")
-complex[complex$`p-value` < 0.05, ]
-write.csv(complex, "GSEA_category_DR_logFC.csv")
+meanExpr <- GSEA(gs, DRs$t, DRs$Symbol)
+write.csv(meanExpr, "GSEA_meanExpr_DR_t.csv")
+head(meanExpr)
+meanExpr <- GSEA(gs, DRs$AveExpr, DRs$Symbol)
+write.csv(meanExpr, "GSEA_meanExpr_DR_AveExpr.csv")
+head(meanExpr)
+meanExpr <- GSEA(gs, FC)
+write.csv(meanExpr, "GSEA_meanExpr_DR_logFC.csv")
+head(meanExpr)
+scaleExpr <- GSEA(gs, DRs$t, DRs$Symbol, method = "category")
+write.csv(scaleExpr, "GSEA_scaleExpr_DR_t.csv")
+head(scaleExpr)
+scaleExpr <- GSEA(gs, DRs$AveExpr, DRs$Symbol, method = "category")
+write.csv(scaleExpr, "GSEA_scaleExpr_DR_AveExpr.csv")
+head(scaleExpr)
+scaleExpr <- GSEA(gs, FC, method = "category")
+scaleExpr[scaleExpr$`p-value` < 0.05, ]
+write.csv(scaleExpr, "GSEA_scaleExpr_DR_logFC.csv")
+
+fgseaRes <- fgsea(pathways = geneIds(gs), stats = FC, minSize = 15, 
+                 maxSize = Inf, nperm = 1000)
+fwrite(fgseaRes, file = "fgsea_DR.csv")
+topPathwaysUp <- fgseaRes[ES > 0 & padj < 0.05][
+  head(order(NES, padj, decreasing = c(TRUE, FALSE)), n = 10), pathway]
+topPathwaysDown <- fgseaRes[ES < 0 & padj < 0.05][
+  head(order(NES, pval), n = 10), pathway]
+topPathways <- c(topPathwaysUp, rev(topPathwaysDown))
+plotGseaTable(geneIds(gs)[topPathways], FC, fgseaRes, gseaParam = 0.5)
+plotEnrichment(geneIds(gs[[topPathways[1]]]), FC) +
+  ggtitle(topPathways[1])
+plotEnrichment(geneIds(gs[[topPathways[20]]]), FC) +
+  ggtitle(topPathways[20])
+plotEnrichment(geneIds(gs[["Increasing_K"]]), FC) +
+  ggtitle("Increasing K")
+plotEnrichment(geneIds(gs[["Decreasing_K"]]), FC) +
+  ggtitle("Decreasing K")
+```
+
+We can test if there are differences in the way each gene set interacts within each gene set in each group:
+
+```{r gsar}
+library("GSAR")
+gs_Refseq <- mapIdentifiers(gs, RefseqIdentifier("org.Hs.eg.db"))
+load("DR.RData", verbose = TRUE)
+index_Refseq <- ids2indices(geneIds(gs), rownames(v$E))
+# Extract the samples of the contrasts
+sel <- design %*% contrasts
+keep <- ifelse(sel[, 1] != 0, TRUE, FALSE)
+# Subset to the samples of DR + and DR -
+pheno <- v$E[, keep]
+sel <- sel[keep, ]
+# Gene set net correlation analysis, competitive, supervised, entire sample
+# Very slow
+results <- TestGeneSets(object = pheno, 
+                        group = ifelse(sel[, 1] == 1L, 1L, 2L),
+                        geneSets = geneIds(gs_Refseq), min.size = 20,
+                        max.size = Inf, test = "GSNCAtest", nperm = 10)
+write.csv(results, file = "gsar_GSNCAtest.csv")
+# Plot the differences between the networks between the samples
+# plotMST2.pathway(object = target.pathway, group = c(rep(1,17), rep(2,33)),
+#                  name = "late_saddlebrown", group1.name = "MST 1",
+#                  group2.name = "MST 2", legend.size = 1, leg.x = -1.2,
+#                  leg.y = 2, label.size = 0.8, label.dist = 0.8,
+#                  cor.method = "pearson")
+```
+
+After analysing numerically the relationship between these sets and the statisticals we can plot them:
+
+```{r plot_K_in_FC}
+index <- ids2indices(geneIds(gs), names(FC))
+barcodeplot(FC, index = index[["Increasing_K"]], 
+            index2 = index[["Decreasing_K"]], sub = "(logFC)",
+            main = "Progressive genes in the ductular reaction")
+barcodeplot(DRs$t, index = index[["Increasing_K"]], 
+            index2 = index[["Decreasing_K"]], sub = "(t)",
+            main = "Progressive genes in the ductular reaction")
+barcodeplot(DRs$AveExpr, index = index[["Increasing_K"]], 
+            index2 = index[["Decreasing_K"]], sub = "(AveExpr)",
+            main = "Progressive genes in the ductular reaction")
 ```
 
 Assuming there is some correlation between the genes in each gene set:
 
 ```{r gsea_2_FC}
-gs <- mapIdentifiers(gs, RefseqIdentifier("org.Hs.eg.db"))
-index <- ids2indices(geneIds(gs), rownames(v$E))
+index <- index_Refseq
 # competitive, supervised, all samples, corrected
 c_gs <- camera(v$E, index, design, c(-1, 1, 0), allow.neg.cor = TRUE)
 write.csv(c_gs, file = "Camera_PosVsNeg.csv", row.names = TRUE)
@@ -228,13 +333,15 @@ write.csv(g_gst, file = "geneSetTest_mixed_PosVsNeg.csv")
 # self-contained, supervised, all samples, uncorrected
 rst_gs <- roast(v$E, index, design, c(-1, 1, 0), set.estatistic = "msq")
 write.csv(rst_gs, file = "roast_PosVsNeg.csv")
+save(c_gs, r_gs, g_gst, rst_gs, file = "gsea_2_FC.RData")
 ```
+Camera when correcting for the correlation in the gene sets, may set highly co-regulated gene sets that are biological interpretable not at the top of the resulting list. But estimates the direction of the gene set.
+Romer uses mean ranks rotation to calculate the statistic. The p-value is estimated by simulation and change each time.
 
 Using single sample test like GSVA we can calculate the difference of the expression of a gene set between samples :
 
 ```{r gsva_FC}
 library("GSVA") # To perform a variation set analysis.
-load("DR.RData", verbose = TRUE)
 GSexpr <- gsva(exprs(DR), gs, rnaseq = TRUE, min.sz = 5, verbose = FALSE)
 fit3 <- lmFit(GSexpr$es.obs, design)
 fit3.2 <- contrasts.fit(fit3, contrasts)
@@ -252,21 +359,31 @@ gsc_l <- GeneSet(names(gsc_late), setName = "Late_network")
 gsc_network <- GeneSetCollection(gsc_e, gsc_l)
 index <- ids2indices(geneIds(gsc_network), rownames(tt))
 
-simple <- GSEA(gs, tt$t, rownames(tt))
-write.csv(complex, "GSEA_simple_t_gs.csv")
-head(simple)
-simple <- GSEA(gs, tt$logFC, rownames(tt))
-write.csv(complex, "GSEA_simple_logFC_gs.csv")
-simple <- GSEA(gs, tt$AveExpr, rownames(tt))
-write.csv(complex, "GSEA_simple_AveExpr_gs.csv")
+fgseaRes <- fgsea(pathways = geneIds(gsc_network), stats = tt$t, minSize = 15, 
+                 maxSize = Inf, nperm = 10000)
+fwrite(fgseaRes, file = "fgsea_t_gs.csv")
+topPathwaysUp <- fgseaRes[ES > 0 & padj < 0.05][head(order(pval), n = 10),
+                                                pathway]
+topPathwaysDown <- fgseaRes[ES < 0 & padj < 0.05][head(order(pval), n = 10),
+                                                pathway]
+topPathways <- c(topPathwaysUp, rev(topPathwaysDown))
+plotGseaTable(geneIds(gs)[topPathways], FC, fgseaRes, gseaParam = 0.5)
 
-simple <- GSEA(gs, tt$t, rownames(tt), method = "category")
-write.csv(complex, "GSEA_category_t_gs.csv")
-head(simple)
-simple <- GSEA(gs, tt$logFC, rownames(tt), method = "category")
-write.csv(complex, "GSEA_category_logFC_gs.csv")
-simple <- GSEA(gs, tt$AveExpr, rownames(tt), method = "category")
-write.csv(complex, "GSEA_category_AveExpr_gs.csv")
+meanExpr <- GSEA(gsc_network, tt$t, rownames(tt))
+write.csv(meanExpr, "GSEA_meanExpr_t_gs.csv")
+head(meanExpr)
+meanExpr <- GSEA(gsc_network, tt$logFC, rownames(tt))
+write.csv(meanExpr, "GSEA_meanExpr_logFC_gs.csv")
+meanExpr <- GSEA(gsc_network, tt$AveExpr, rownames(tt))
+write.csv(meanExpr, "GSEA_meanExpr_AveExpr_gs.csv")
+
+scaleExpr <- GSEA(gsc_network, tt$t, rownames(tt), method = "category")
+write.csv(scaleExpr, "GSEA_scaleExpr_t_gs.csv")
+head(scaleExpr)
+scaleExpr <- GSEA(gsc_network, tt$logFC, rownames(tt), method = "category")
+write.csv(scaleExpr, "GSEA_scaleExpr_logFC_gs.csv")
+scaleExpr <- GSEA(gsc_network, tt$AveExpr, rownames(tt), method = "category")
+write.csv(scaleExpr, "GSEA_scaleExpr_AveExpr_gs.csv")
 
 c_gs <- camera(GSexpr$es.obs, index, design, c(-1, 1, 0), 
                allow.neg.cor = TRUE)
