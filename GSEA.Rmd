@@ -123,11 +123,18 @@ FC <- FC[!duplicated(names(FC))]
 FC <- sort(FC, decreasing = TRUE)
 pFC <- FC[DRs$logFC > 0 & DRs$adj.P.Val < 0.05]
 nFC <- FC[DRs$logFC < 0 & DRs$adj.P.Val < 0.05]
+RD_signature_up <- DRs$Symbol[DRs$logFC > 0 & DRs$adj.P.Val < 0.05][1:100]
+RD_signature_dw <- DRs$Symbol[DRs$logFC < 0 & DRs$adj.P.Val < 0.05][1:100]
+gst_pFC <- GeneSet(as.character(RD_signature_up), setName = "Top100_Positive_FC",
+                   geneIdType = SymbolIdentifier("org.Hs.eg.db"))
+gst_nFC <- GeneSet(as.character(RD_signature_dw), setName = "Top100_Negative_FC",
+                   geneIdType = SymbolIdentifier("org.Hs.eg.db"))
 
-gs_pFC <- GeneSet(unique(names(pFC)), setName = "Positive_FC")
-gs_nFC <- GeneSet(unique(names(nFC)), setName = "Negative_FC")
-gsc_FC <- GeneSetCollection(gs_pFC, gs_nFC)
-gsc_FC <- mapIdentifiers(gsc_FC, SymbolIdentifier("org.Hs.eg.db"))
+gs_pFC <- GeneSet(unique(names(pFC)), setName = "Positive_FC",
+                  geneIdType = SymbolIdentifier("org.Hs.eg.db"))
+gs_nFC <- GeneSet(unique(names(nFC)), setName = "Negative_FC", 
+                  geneIdType = SymbolIdentifier("org.Hs.eg.db"))
+gsc_FC <- GeneSetCollection(gs_pFC, gs_nFC, gst_nFC, gst_pFC)
 ```
 We can observe where are the genes differentially expressed in the ductular reaction compared to the progressive expression of the genes in the disease:
 
@@ -147,9 +154,10 @@ c2BroadSets <- c2BroadSets[unique(c(grep("^KEGG", names(c2BroadSets)),
                                     grep("^REACTOME", names(c2BroadSets)), 
                                     grep("^BIOCARTA", names(c2BroadSets)),
                                     grep("LIVER", names(c2BroadSets)),
-                                    grep("HEPATO", names(c2BroadSets))))]
+                                    grep("HEPATO", names(c2BroadSets)))
+                                  )]
 x <- sapply(geneIds(c2BroadSets), length)
-c2BroadSets <- c2BroadSets[x > 20L] # To be able to test it with the GSEA function
+c2BroadSets <- c2BroadSets[x >= 20L] # To be able to test it with the GSEA function
 c2BroadSets <- mapIdentifiers(c2BroadSets, SymbolIdentifier("org.Hs.eg.db"))
 gsc_late <- mapIdentifiers(gsc_late, SymbolIdentifier("org.Hs.eg.db"))
 gsc_early <- mapIdentifiers(gsc_early, SymbolIdentifier("org.Hs.eg.db"))
@@ -169,10 +177,11 @@ fgseaRes <- fgsea(pathways = geneIds(gs), stats = K, minSize = 15,
 fgseaRes <- fgseaRes[order(abs(NES), padj, decreasing = c(TRUE, FALSE)), ]
 library("data.table") # To be able to store thd ata.table efficiently
 fwrite(fgseaRes, file = "fgsea_K.csv")
-topPathwaysUp <- fgseaRes[ES > 0 & padj < 0.05][
-  head(order(NES, padj, decreasing = c(TRUE, FALSE)), n = 10), pathway]
-topPathwaysDown <- fgseaRes[ES < 0 & padj < 0.05][
-  head(order(NES, pval), n = 10), pathway]
+fgseaRes <- fgseaRes[order(abs(NES), padj, decreasing = c(TRUE, FALSE)), ]
+topPathwaysUp <- fgseaRes[ES > 0 & padj < 0.05][head(order(padj), n = 10),
+                                                pathway]
+topPathwaysDown <- fgseaRes[ES < 0 & padj < 0.05][head(order(padj), n = 10),
+                                                pathway]
 topPathways <- c(topPathwaysUp, rev(topPathwaysDown))
 plotGseaTable(geneIds(gs)[topPathways], K, fgseaRes, gseaParam = 0.5)
 library("ggplot2")
@@ -286,9 +295,9 @@ pheno <- v$E[, keep]
 sel <- sel[keep, ]
 # Gene set net correlation analysis, competitive, supervised, entire sample
 results <- TestGeneSets(object = pheno,
-group = ifelse(sel[, 1] == 1L, 1L, 2L),
-geneSets = geneIds(gs_Refseq), min.size = 20,
-max.size = Inf, test = "GSNCAtest", nperm = 1000)
+                        group = ifelse(sel[, 1] == 1L, 1L, 2L),
+                        geneSets = geneIds(gs_Refseq), min.size = 20,
+                        max.size = Inf, test = "GSNCAtest", nperm = 1000)
 gsar.res <- as.data.frame(results)
 colnames(gsar.res) <- "pvalue"
 write.csv(results, file = "gsar_GSNCAtest.csv")
@@ -416,8 +425,6 @@ barcodeplot(tt$logFC, index = index[[1]], index2 = index[[2]],
 
 We can further test if the modules of the networks are enriched on the top 100 genes of the ductular reaction
 ```{r fisher}
-RD_signature_up <- DRs$Symbol[DRs$logFC > 0 & DRs$adj.P.Val < 0.05][1:100]
-RD_signature_dw <- DRs$Symbol[DRs$logFC < 0 & DRs$adj.P.Val < 0.05][1:100]
 contingency <- function(gs, signature, size) {
   setIds <- geneIds(gs)
   TT <- sum(setIds %in% signature)
@@ -449,6 +456,118 @@ tests <- sapply(names(gsc_early), function(x) {
   fisher.test(contingency(gsc_early[[x]], RD_signature_dw, 13254))$p.value})
 tests <- p.adjust(tests)
 tests[tests < 0.05]
+```
+
+## On each phases
+
+We can observe the top differentially genes of each phase compared with the healthy samples and between each phase of the disease:
+
+```{r phases_DEG}
+load("ALD.RData", verbose = TRUE)
+tt.ASH <- topTable(fit2, coef = "ASHvsNormal", sort.by = "logFC", 
+                    number = Inf)
+write.csv(tt.ASH, file = "ASHvsNormal.csv")
+tt.Cirr <- topTable(fit2, coef = "CirrhosisVsNormal", sort.by = "logFC", 
+                    number = Inf)
+write.csv(tt.Cirr, file = "CirrhosisVsNormal.csv")
+tt.AH <- topTable(fit2, coef = "AHvsNormal", sort.by = "logFC", 
+                    number = Inf)
+write.csv(tt.AH, file = "AHvsNormal.csv")
+tt.AHsevere <- topTable(fit2, coef = "SevereVsNormal", sort.by = "logFC", 
+                    number = Inf)
+write.csv(tt.Cirr.ASH, file = "SevereVsNormal.csv")
+tt.Cirr.ASH <- topTable(fit2, coef = "CirrhosisVsASH", sort.by = "logFC", 
+                    number = Inf)
+write.csv(tt.ASH, file = "CirrhosisVsASH.csv")
+tt.AH.Cirr <- topTable(fit2, coef = "AHvsCirrhosis", sort.by = "logFC", 
+                    number = Inf)
+write.csv(tt.AH.Cirr, file = "AHvsCirrhosis.csv")
+tt.AHsevere.AH <- topTable(fit2, coef = "SevereVsHepatitis", 
+                           sort.by = "logFC", number = Inf)
+write.csv(tt.AHsevere.AH, file = "SevereVsHepatitis.csv")
+```
+
+We can test with those statistics the enrichment of the gene sets in each comparison:
+
+```{r phases_fgsea, eval = FALSE}
+fgsea.plot <- function(fgseaRes) {
+  fgseaRes <- fgseaRes[order(abs(NES), padj, decreasing = c(TRUE, FALSE)), ]
+  topPathwaysUp <- fgseaRes[ES > 0 & padj < 0.05][head(order(padj), n = 10),
+                                                  pathway]
+  topPathwaysDown <- fgseaRes[ES < 0 & padj < 0.05][head(order(padj), n = 10),
+                                                    pathway]
+  topPathways <- c(topPathwaysUp, rev(topPathwaysDown))
+  plotGseaTable(geneIds(gs)[topPathways], K, fgseaRes, gseaParam = 0.5)
+}
+fgseaRes <- fgsea(pathways = geneIds(gs), stats = tt.ASH$t, minSize = 15, 
+                 maxSize = Inf, nperm = 1000)
+fgseaRes <- fgseaRes[order(abs(NES), padj, decreasing = c(TRUE, FALSE)), ]
+fwrite(fgseaRes, file = "fgsea_ASH.csv")
+fgsea.plot(fgseaRes)
+fgseaRes <- fgsea(pathways = geneIds(gs), stats = tt.Cirr$t, minSize = 15, 
+                 maxSize = Inf, nperm = 1000)
+fgseaRes <- fgseaRes[order(abs(NES), padj, decreasing = c(TRUE, FALSE)), ]
+fwrite(fgseaRes, file = "fgsea_Cirr.csv")
+fgsea.plot(fgseaRes)
+fgseaRes <- fgsea(pathways = geneIds(gs), stats = tt.AH, minSize = 15, 
+                 maxSize = Inf, nperm = 1000)
+fgseaRes <- fgseaRes[order(abs(NES), padj, decreasing = c(TRUE, FALSE)), ]
+fwrite(fgseaRes, file = "fgsea_AH.csv")
+fgsea.plot(fgseaRes)
+fgseaRes <- fgsea(pathways = geneIds(gs), stats = tt.AHsevere, minSize = 15, 
+                 maxSize = Inf, nperm = 1000)
+fgseaRes <- fgseaRes[order(abs(NES), padj, decreasing = c(TRUE, FALSE)), ]
+fwrite(fgseaRes, file = "fgsea_AHsevere.csv")
+fgsea.plot(fgseaRes)
+fgseaRes <- fgsea(pathways = geneIds(gs), stats = tt.Cirr.ASH$t, minSize = 15, 
+                 maxSize = Inf, nperm = 1000)
+fgseaRes <- fgseaRes[order(abs(NES), padj, decreasing = c(TRUE, FALSE)), ]
+fwrite(fgseaRes, file = "fgsea_Cirr.ASH.csv")
+fgsea.plot(fgseaRes)
+fgseaRes <- fgsea(pathways = geneIds(gs), stats = tt.AH.Cirr$t, minSize = 15, 
+                 maxSize = Inf, nperm = 1000)
+fgseaRes <- fgseaRes[order(abs(NES), padj, decreasing = c(TRUE, FALSE)), ]
+fwrite(fgseaRes, file = "fgsea_AH.Cirr.csv")
+fgsea.plot(fgseaRes)
+fgseaRes <- fgsea(pathways = geneIds(gs), stats = tt.AHsevere.AH$t, minSize = 15, 
+                 maxSize = Inf, nperm = 1000)
+fgseaRes <- fgseaRes[order(abs(NES), padj, decreasing = c(TRUE, FALSE)), ]
+fwrite(fgseaRes, file = "fgsea_AHsevere.AH.csv")
+fgsea.plot(fgseaRes)
+```
+
+
+We can also observe how are each gene set differentially expressed, including those obtained from the microdissection:
+```{r gsva_ALD}
+gs <- GeneSetCollection(c(gs, gsc_FC))
+GSexpr <- gsva(exprs(ALD), gs, rnaseq = TRUE, min.sz = 5, verbose = FALSE)
+fit4 <- lmFit(GSexpr$es.obs, design)
+fit4.2 <- contrasts.fit(fit3, contrasts0)
+fit4.2 <- eBayes(fit3.2)
+```
+Once we have transformed the data we can retrieve the fold change for each gene set:
+```{r phases_DEGS}
+tt.ASH <- topTable(fit4.2, coef = "ASHvsNormal", sort.by = "logFC", 
+                    number = Inf)
+write.csv(tt.ASH, file = "gs_ASHvsNormal.csv")
+tt.Cirr <- topTable(fit4.2, coef = "CirrhosisVsNormal", sort.by = "logFC", 
+                    number = Inf)
+write.csv(tt.Cirr, file = "gs_CirrhosisVsNormal.csv")
+tt.AH <- topTable(fit4.2, coef = "AHvsNormal", sort.by = "logFC", 
+                    number = Inf)
+write.csv(tt.AH, file = "gs_AHvsNormal.csv")
+tt.AHsevere <- topTable(fit4.2, coef = "SevereVsNormal", sort.by = "logFC", 
+                    number = Inf)
+write.csv(tt.Cirr.ASH, file = "gs_SevereVsNormal.csv")
+tt.Cirr.ASH <- topTable(fit4.2, coef = "CirrhosisVsASH", sort.by = "logFC", 
+                    number = Inf)
+write.csv(tt.ASH, file = "gs_CirrhosisVsASH.csv")
+tt.AH.Cirr <- topTable(fit4.2, coef = "AHvsCirrhosis", sort.by = "logFC", 
+                    number = Inf)
+write.csv(tt.AH.Cirr, file = "gs_AHvsCirrhosis.csv")
+tt.AHsevere.AH <- topTable(fit4.2, coef = "SevereVsHepatitis", 
+                           sort.by = "logFC", number = Inf)
+write.csv(tt.AHsevere.AH, file = "gs_SevereVsHepatitis.csv")
 ```
 
 # SessionInfo
