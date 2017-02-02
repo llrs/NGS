@@ -373,17 +373,10 @@ gsc_e <- GeneSet(names(gsc_early), setName = "Early_network")
 gsc_l <- GeneSet(names(gsc_late), setName = "Late_network")
 gsc_network <- GeneSetCollection(gsc_e, gsc_l)
 index <- ids2indices(geneIds(gsc_network), rownames(tt))
-
-fgseaRes <- fgsea(pathways = geneIds(gsc_network), stats = tt$t, minSize = 15, 
+stats <- tt$t
+names(stats) <- rownames(tt)
+fgsea(pathways = geneIds(gsc_network), stats = stats, minSize = 15, 
                  maxSize = Inf, nperm = 10000)
-fgseaRes <- fgseaRes[order(abs(NES), padj, decreasing = c(TRUE, FALSE)), ]
-fwrite(fgseaRes, file = "fgsea_t_gs.csv")
-topPathwaysUp <- fgseaRes[ES > 0 & padj < 0.05][head(order(pval), n = 10),
-                                                pathway]
-topPathwaysDown <- fgseaRes[ES < 0 & padj < 0.05][head(order(pval), n = 10),
-                                                pathway]
-topPathways <- c(topPathwaysUp, rev(topPathwaysDown))
-plotGseaTable(geneIds(gs)[topPathways], FC, fgseaRes, gseaParam = 0.5)
 
 meanExpr <- GSEA(gsc_network, tt$t, rownames(tt))
 write.csv(meanExpr, "GSEA_meanExpr_t_gs.csv")
@@ -475,10 +468,10 @@ tt.AH <- topTable(fit2, coef = "AHvsNormal", sort.by = "logFC",
 write.csv(tt.AH, file = "AHvsNormal.csv")
 tt.AHsevere <- topTable(fit2, coef = "SevereVsNormal", sort.by = "logFC", 
                     number = Inf)
-write.csv(tt.Cirr.ASH, file = "SevereVsNormal.csv")
+write.csv(tt.AHsevere, file = "SevereVsNormal.csv")
 tt.Cirr.ASH <- topTable(fit2, coef = "CirrhosisVsASH", sort.by = "logFC", 
                     number = Inf)
-write.csv(tt.ASH, file = "CirrhosisVsASH.csv")
+write.csv(tt.Cirr.ASH, file = "CirrhosisVsASH.csv")
 tt.AH.Cirr <- topTable(fit2, coef = "AHvsCirrhosis", sort.by = "logFC", 
                     number = Inf)
 write.csv(tt.AH.Cirr, file = "AHvsCirrhosis.csv")
@@ -489,7 +482,8 @@ write.csv(tt.AHsevere.AH, file = "SevereVsHepatitis.csv")
 
 We can test with those statistics the enrichment of the gene sets in each comparison:
 
-```{r phases_fgsea, eval = FALSE}
+```{r phases_fgsea, eval = TRUE}
+# To plot the results
 fgsea.plot <- function(fgseaRes) {
   fgseaRes <- fgseaRes[order(abs(NES), padj, decreasing = c(TRUE, FALSE)), ]
   topPathwaysUp <- fgseaRes[ES > 0 & padj < 0.05][head(order(padj), n = 10),
@@ -499,53 +493,47 @@ fgsea.plot <- function(fgseaRes) {
   topPathways <- c(topPathwaysUp, rev(topPathwaysDown))
   plotGseaTable(geneIds(gs)[topPathways], K, fgseaRes, gseaParam = 0.5)
 }
-fgseaRes <- fgsea(pathways = geneIds(gs), stats = tt.ASH$t, minSize = 15, 
+# To compute the statistics and order them and store them in a file
+fgsea.test <- function(gs, tt, column, file) {
+  stats <- tt[, column]
+  names(stats) <- rownames(tt)
+  fgseaRes <- fgsea(pathways = geneIds(gs), stats = stats, minSize = 15, 
                  maxSize = Inf, nperm = 1000)
-fgseaRes <- fgseaRes[order(abs(NES), padj, decreasing = c(TRUE, FALSE)), ]
-fwrite(fgseaRes, file = "fgsea_ASH.csv")
+  fgseaRes <- fgseaRes[order(abs(NES), padj, decreasing = c(TRUE, FALSE)), ]
+  fwrite(fgseaRes, file = file)
+  return(fgseaRes)
+}
+gs <- GeneSetCollection(c(gs, gsc_FC))
+
+fgseaRes <- fgsea.test(gs, tt.ASH, "t", "fgsea_ASH.csv")
 fgsea.plot(fgseaRes)
-fgseaRes <- fgsea(pathways = geneIds(gs), stats = tt.Cirr$t, minSize = 15, 
-                 maxSize = Inf, nperm = 1000)
-fgseaRes <- fgseaRes[order(abs(NES), padj, decreasing = c(TRUE, FALSE)), ]
-fwrite(fgseaRes, file = "fgsea_Cirr.csv")
+fgseaRes <- fgsea.test(gs, tt.Cirr, "t", "fgsea_Cirr.csv")
 fgsea.plot(fgseaRes)
-fgseaRes <- fgsea(pathways = geneIds(gs), stats = tt.AH, minSize = 15, 
-                 maxSize = Inf, nperm = 1000)
-fgseaRes <- fgseaRes[order(abs(NES), padj, decreasing = c(TRUE, FALSE)), ]
-fwrite(fgseaRes, file = "fgsea_AH.csv")
+fgseaRes <- fgsea.test(gs, tt.AH, "t", "fgsea_AH.csv")
 fgsea.plot(fgseaRes)
-fgseaRes <- fgsea(pathways = geneIds(gs), stats = tt.AHsevere, minSize = 15, 
-                 maxSize = Inf, nperm = 1000)
-fgseaRes <- fgseaRes[order(abs(NES), padj, decreasing = c(TRUE, FALSE)), ]
-fwrite(fgseaRes, file = "fgsea_AHsevere.csv")
+fgseaRes <- fgsea.test(gs, tt.AHsevere, "t", "fgsea_AHsevere.csv")
 fgsea.plot(fgseaRes)
-fgseaRes <- fgsea(pathways = geneIds(gs), stats = tt.Cirr.ASH$t, minSize = 15, 
-                 maxSize = Inf, nperm = 1000)
-fgseaRes <- fgseaRes[order(abs(NES), padj, decreasing = c(TRUE, FALSE)), ]
-fwrite(fgseaRes, file = "fgsea_Cirr.ASH.csv")
+fgseaRes <- fgsea.test(gs, tt.Cirr.ASH, "t", "fgsea_Cirr.ASH.csv")
 fgsea.plot(fgseaRes)
-fgseaRes <- fgsea(pathways = geneIds(gs), stats = tt.AH.Cirr$t, minSize = 15, 
-                 maxSize = Inf, nperm = 1000)
-fgseaRes <- fgseaRes[order(abs(NES), padj, decreasing = c(TRUE, FALSE)), ]
-fwrite(fgseaRes, file = "fgsea_AH.Cirr.csv")
+fgseaRes <- fgsea.test(gs, tt.AH.Cirr, "t", "fgsea_AH.Cirr.csv")
 fgsea.plot(fgseaRes)
-fgseaRes <- fgsea(pathways = geneIds(gs), stats = tt.AHsevere.AH$t, minSize = 15, 
-                 maxSize = Inf, nperm = 1000)
-fgseaRes <- fgseaRes[order(abs(NES), padj, decreasing = c(TRUE, FALSE)), ]
-fwrite(fgseaRes, file = "fgsea_AHsevere.AH.csv")
+fgseaRes <- fgsea.test(gs, tt.AHsevere.AH, "t", "fgsea_AHsevere.AH.csv")
 fgsea.plot(fgseaRes)
 ```
 
 
 We can also observe how are each gene set differentially expressed, including those obtained from the microdissection:
 ```{r gsva_ALD}
-gs <- GeneSetCollection(c(gs, gsc_FC))
 GSexpr <- gsva(exprs(ALD), gs, rnaseq = TRUE, min.sz = 5, verbose = FALSE)
 fit4 <- lmFit(GSexpr$es.obs, design)
-fit4.2 <- contrasts.fit(fit3, contrasts0)
-fit4.2 <- eBayes(fit3.2)
+fit4.2 <- contrasts.fit(fit4, contrasts0)
+fit4.2 <- eBayes(fit4.2)
+results <- decideTests(fit4.2, adjust.method = "BH", lfc = 0)
+summary(results)
 ```
+
 Once we have transformed the data we can retrieve the fold change for each gene set:
+
 ```{r phases_DEGS}
 tt.ASH <- topTable(fit4.2, coef = "ASHvsNormal", sort.by = "logFC", 
                     number = Inf)
@@ -558,16 +546,28 @@ tt.AH <- topTable(fit4.2, coef = "AHvsNormal", sort.by = "logFC",
 write.csv(tt.AH, file = "gs_AHvsNormal.csv")
 tt.AHsevere <- topTable(fit4.2, coef = "SevereVsNormal", sort.by = "logFC", 
                     number = Inf)
-write.csv(tt.Cirr.ASH, file = "gs_SevereVsNormal.csv")
+write.csv(tt.AHsevere, file = "gs_SevereVsNormal.csv")
 tt.Cirr.ASH <- topTable(fit4.2, coef = "CirrhosisVsASH", sort.by = "logFC", 
                     number = Inf)
-write.csv(tt.ASH, file = "gs_CirrhosisVsASH.csv")
+write.csv(tt.Cirr.ASH, file = "gs_CirrhosisVsASH.csv")
 tt.AH.Cirr <- topTable(fit4.2, coef = "AHvsCirrhosis", sort.by = "logFC", 
                     number = Inf)
 write.csv(tt.AH.Cirr, file = "gs_AHvsCirrhosis.csv")
 tt.AHsevere.AH <- topTable(fit4.2, coef = "SevereVsHepatitis", 
                            sort.by = "logFC", number = Inf)
 write.csv(tt.AHsevere.AH, file = "gs_SevereVsHepatitis.csv")
+```
+
+Now we can see the weight of the network in each step:
+
+```{r phases_network_DEGS}
+fgsea.test(gsc_network, tt.ASH, "t", "gs_fgsea_ASH.csv")
+fgsea.test(gsc_network, tt.Cirr, "t", "gs_fgsea_Cirr.csv")
+fgsea.test(gsc_network, tt.AH, "t", "gs_fgsea_AH.csv")
+fgsea.test(gsc_network, tt.AHsevere, "t", "gs_fgsea_AHsevere.csv")
+fgsea.test(gsc_network, tt.Cirr.ASH, "t", "gs_fgsea_Cirr.ASH.csv")
+fgsea.test(gsc_network, tt.AH.Cirr, "t", "gs_fgsea_AH.Cirr.csv")
+fgsea.test(gsc_network, tt.AHsevere.AH, "t", "fgsea_AHsevere.AH.csv")
 ```
 
 # SessionInfo
