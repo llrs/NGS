@@ -265,7 +265,13 @@ But for a more general overview is better to see all the genes involved
 DEG_names <- mapIds(org.Hs.eg.db, keys = rownames(signif), 
                     keytype = "REFSEQ", column = "ENTREZID")
 enrich <- enrichPathway(DEG_names, minGSSize = 2, maxGSSize = 2000)
+enrich_up <- enrichPathway(DEG_up, minGSSize = 2, maxGSSize = 2000)
+enrich_down <- enrichPathway(DEG_down, minGSSize = 2, maxGSSize = 2000)
 write.csv(as.data.frame(enrich), file = "Reactome_DR.csv", 
+          row.names = FALSE, na = "")
+write.csv(as.data.frame(enrich_up), file = "Reactome_up_DR.csv", 
+          row.names = FALSE, na = "")
+write.csv(as.data.frame(enrich_down), file = "Reactome_down_DR.csv", 
           row.names = FALSE, na = "")
 dotplot(enrich)
 enrichMap(enrich, layout = igraph::layout_nicely,
@@ -299,8 +305,48 @@ resultKS.elim <- runTest(GOdata.bp, algorithm = "elim", statistic = "ks")
 allRes <- GenTable(GOdata.bp, classic = resultFisher, 
                    weight01 = resultKS.weight, elim = resultKS.elim, 
                    orderBy = "weight01", topNodes = 1000)
-allRes <- allRes[allRes$weight01 < 0.05, ]
-write.csv(allRes, file = "GO_DR_progression.csv", row.names = FALSE)
+allRes <- allRes[as.numeric(allRes$weight01) < 0.05, ]
+write.csv(allRes, file = "GO_DR_diff.csv", row.names = FALSE)
+
+up <- tt.DR[tt.DR$logFC > 0, "adj.P.Val"]
+names(up) <- rownames(tt.DR[tt.DR$logFC > 0, ])
+GOdata.bp <- new("topGOdata",
+                 ontology = "BP",
+                 description = "Biological process of the signature module.",
+                 allGenes = up,
+                 annot = annFUN.gene2GO, gene2GO = idsMapping,
+                 geneSelection = topDiffGenes,
+                 nodeSize = 5)
+save(GOdata.bp, file = "GO_DR_up.RData")
+resultFisher <- runTest(GOdata.bp, algorithm = "classic", statistic = "fisher")
+resultKS.weight <- runTest(GOdata.bp, algorithm = 'weight01', statistic = "ks")
+resultKS.elim <- runTest(GOdata.bp, algorithm = "elim", statistic = "ks")
+
+allRes <- GenTable(GOdata.bp, classic = resultFisher, 
+                   weight01 = resultKS.weight,
+                   orderBy = "weight01", topNodes = 1000, numChar = 150)
+allRes <- allRes[as.numeric(allRes$weight01) < 0.05, ]
+write.csv(allRes, file = "GO_DR_up.csv", row.names = FALSE)
+
+down <- tt.DR[tt.DR$logFC < 0, "adj.P.Val"]
+names(down) <- rownames(tt.DR[tt.DR$logFC < 0, ])
+GOdata.bp <- new("topGOdata",
+                 ontology = "BP",
+                 description = "Biological process of the signature module.",
+                 allGenes = down,
+                 annot = annFUN.gene2GO, gene2GO = idsMapping,
+                 geneSelection = topDiffGenes,
+                 nodeSize = 5)
+save(GOdata.bp, file = "GO_DR_down.RData")
+resultFisher <- runTest(GOdata.bp, algorithm = "classic", statistic = "fisher")
+resultKS.weight <- runTest(GOdata.bp, algorithm = 'weight01', statistic = "ks")
+resultKS.elim <- runTest(GOdata.bp, algorithm = "elim", statistic = "ks")
+
+allRes <- GenTable(GOdata.bp, classic = resultFisher, 
+                   weight01 = resultKS.weight, elim = resultKS.elim, 
+                   orderBy = "weight01", topNodes = 1000, numChar = 200)
+allRes <- allRes[as.numeric(allRes$weight01) < 0.05, ]
+write.csv(allRes, file = "GO_DR_down.csv", row.names = FALSE)
 head(allRes)
 showSigOfNodes(GOdata.bp, score(resultKS.weight), firstSigNodes = 10, useInfo = 'all')
 title(main = "GO analysis using Weight01 algorithm", line = -2)
