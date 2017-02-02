@@ -166,6 +166,7 @@ head(meanExpr_K)
 
 fgseaRes <- fgsea(pathways = geneIds(gs), stats = K, minSize = 15, 
                  maxSize = Inf, nperm = 10000)
+fgseaRes <- fgseaRes[order(abs(NES), padj, decreasing = c(TRUE, FALSE)), ]
 library("data.table") # To be able to store thd ata.table efficiently
 fwrite(fgseaRes, file = "fgsea_K.csv")
 topPathwaysUp <- fgseaRes[ES > 0 & padj < 0.05][
@@ -255,6 +256,7 @@ write.csv(scaleExpr, "GSEA_scaleExpr_DR_logFC.csv")
 
 fgseaRes <- fgsea(pathways = geneIds(gs), stats = FC, minSize = 15, 
                  maxSize = Inf, nperm = 1000)
+fgseaRes <- fgseaRes[order(abs(NES), padj, decreasing = c(TRUE, FALSE)), ]
 fwrite(fgseaRes, file = "fgsea_DR.csv")
 topPathwaysUp <- fgseaRes[ES > 0 & padj < 0.05][
   head(order(NES, padj, decreasing = c(TRUE, FALSE)), n = 10), pathway]
@@ -274,11 +276,8 @@ plotEnrichment(geneIds(gs[["Decreasing_K"]]), FC) +
 
 We can test if there are differences in the way each gene set interacts within each gene set in each group:
 
-```{r gsar}
+```{r gsar, eval=FALSE}
 library("GSAR")
-gs_Refseq <- mapIdentifiers(gs, RefseqIdentifier("org.Hs.eg.db"))
-load("DR.RData", verbose = TRUE)
-index_Refseq <- ids2indices(geneIds(gs), rownames(v$E))
 # Extract the samples of the contrasts
 sel <- design %*% contrasts
 keep <- ifelse(sel[, 1] != 0, TRUE, FALSE)
@@ -286,11 +285,12 @@ keep <- ifelse(sel[, 1] != 0, TRUE, FALSE)
 pheno <- v$E[, keep]
 sel <- sel[keep, ]
 # Gene set net correlation analysis, competitive, supervised, entire sample
-# Very slow
-results <- TestGeneSets(object = pheno, 
-                        group = ifelse(sel[, 1] == 1L, 1L, 2L),
-                        geneSets = geneIds(gs_Refseq), min.size = 20,
-                        max.size = Inf, test = "GSNCAtest", nperm = 10)
+results <- TestGeneSets(object = pheno,
+group = ifelse(sel[, 1] == 1L, 1L, 2L),
+geneSets = geneIds(gs_Refseq), min.size = 20,
+max.size = Inf, test = "GSNCAtest", nperm = 1000)
+gsar.res <- as.data.frame(results)
+colnames(gsar.res) <- "pvalue"
 write.csv(results, file = "gsar_GSNCAtest.csv")
 # Plot the differences between the networks between the samples
 # plotMST2.pathway(object = target.pathway, group = c(rep(1,17), rep(2,33)),
@@ -299,6 +299,7 @@ write.csv(results, file = "gsar_GSNCAtest.csv")
 #                  leg.y = 2, label.size = 0.8, label.dist = 0.8,
 #                  cor.method = "pearson")
 ```
+However it is too slow and we will do it only on specific modules. 
 
 After analysing numerically the relationship between these sets and the statisticals we can plot them:
 
@@ -318,9 +319,12 @@ barcodeplot(DRs$AveExpr, index = index[["Increasing_K"]],
 Assuming there is some correlation between the genes in each gene set:
 
 ```{r gsea_2_FC}
-index <- index_Refseq
+load("DR.RData", verbose = TRUE)
+gs_Refseq <- mapIdentifiers(gs, RefseqIdentifier("org.Hs.eg.db"))
+index <- ids2indices(geneIds(gs_Refseq), rownames(v$E))
 # competitive, supervised, all samples, corrected
-c_gs <- camera(v$E, index, design, c(-1, 1, 0), allow.neg.cor = TRUE)
+c_gs <- camera(v$E, index, design, c(-1, 1, 0), allow.neg.cor = TRUE,
+               inter.gene.cor = NA)
 write.csv(c_gs, file = "Camera_PosVsNeg.csv", row.names = TRUE)
 
 # competitive, supervised, all samples, uncorrected
@@ -338,11 +342,13 @@ save(c_gs, r_gs, g_gst, rst_gs, file = "gsea_2_FC.RData")
 Camera when correcting for the correlation in the gene sets, may set highly co-regulated gene sets that are biological interpretable not at the top of the resulting list. But estimates the direction of the gene set.
 Romer uses mean ranks rotation to calculate the statistic. The p-value is estimated by simulation and change each time.
 
-Using single sample test like GSVA we can calculate the difference of the expression of a gene set between samples :
+## Gene sets are differentially expressed
+
+In order to know which gene sets are differentially expressed in dhe ductular reaction we ca use a single sample test like GSVA:
 
 ```{r gsva_FC}
 library("GSVA") # To perform a variation set analysis.
-GSexpr <- gsva(exprs(DR), gs, rnaseq = TRUE, min.sz = 5, verbose = FALSE)
+GSexpr <- gsva(exprs(DR), gs_Refseq, rnaseq = TRUE, min.sz = 5, verbose = FALSE)
 fit3 <- lmFit(GSexpr$es.obs, design)
 fit3.2 <- contrasts.fit(fit3, contrasts)
 fit3.2 <- eBayes(fit3.2)
@@ -361,6 +367,7 @@ index <- ids2indices(geneIds(gsc_network), rownames(tt))
 
 fgseaRes <- fgsea(pathways = geneIds(gsc_network), stats = tt$t, minSize = 15, 
                  maxSize = Inf, nperm = 10000)
+fgseaRes <- fgseaRes[order(abs(NES), padj, decreasing = c(TRUE, FALSE)), ]
 fwrite(fgseaRes, file = "fgsea_t_gs.csv")
 topPathwaysUp <- fgseaRes[ES > 0 & padj < 0.05][head(order(pval), n = 10),
                                                 pathway]
@@ -386,7 +393,7 @@ scaleExpr <- GSEA(gsc_network, tt$AveExpr, rownames(tt), method = "category")
 write.csv(scaleExpr, "GSEA_scaleExpr_AveExpr_gs.csv")
 
 c_gs <- camera(GSexpr$es.obs, index, design, c(-1, 1, 0), 
-               allow.neg.cor = TRUE)
+               allow.neg.cor = TRUE, inter.gene.cor = NA)
 write.csv(c_gs, file = "Camera_gs_PosVsNeg.csv", row.names = TRUE, )
 
 r_gs <- romer(GSexpr$es.obs, index, design, c(-1, 1, 0))
@@ -403,6 +410,45 @@ barcodeplot(tt$t, index = index[[1]], index2 = index[[2]],
             main = "Early and Late networks in the DR", sub = "(t)")
 barcodeplot(tt$logFC, index = index[[1]], index2 = index[[2]], 
             main = "Early and Late networks in the DR", sub = "(logFC)")
+```
+
+## On the modules
+
+We can further test if the modules of the networks are enriched on the top 100 genes of the ductular reaction
+```{r fisher}
+RD_signature_up <- DRs$Symbol[DRs$logFC > 0 & DRs$adj.P.Val < 0.05][1:100]
+RD_signature_dw <- DRs$Symbol[DRs$logFC < 0 & DRs$adj.P.Val < 0.05][1:100]
+contingency <- function(gs, signature, size) {
+  setIds <- geneIds(gs)
+  TT <- sum(setIds %in% signature)
+  TF <- length(setIds) - TT
+  FT <- length(signature) - TT
+  FF <- size - TT - TF - FT
+  m <- matrix(c(TT, TF, FT, FF), ncol = 2)
+  colnames(m) <- c("GeneSet", "!GeneSet")
+  rownames(m) <- c("Signature", "!Signature")
+  m
+}
+
+tests <- sapply(names(gsc_late), function(x) {
+  fisher.test(contingency(gsc_late[[x]], RD_signature_up, 13254))$p.value})
+tests <- p.adjust(tests)
+tests[tests < 0.05]
+
+tests <- sapply(names(gsc_early), function(x) {
+  fisher.test(contingency(gsc_early[[x]], RD_signature_up, 13254))$p.value})
+tests <- p.adjust(tests)
+tests[tests < 0.05]
+
+tests <- sapply(names(gsc_late), function(x) {
+  fisher.test(contingency(gsc_late[[x]], RD_signature_dw, 13254))$p.value})
+tests <- p.adjust(tests)
+tests[tests < 0.05]
+
+tests <- sapply(names(gsc_early), function(x) {
+  fisher.test(contingency(gsc_early[[x]], RD_signature_dw, 13254))$p.value})
+tests <- p.adjust(tests)
+tests[tests < 0.05]
 ```
 
 # SessionInfo
