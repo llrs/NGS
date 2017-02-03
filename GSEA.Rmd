@@ -39,6 +39,7 @@ library("GSEABase") # To create gene sets and collections
 library("Category") # to use applyByCategory
 library("fgsea") # To make GSEAs like in the BROAD webpage
 library("org.Hs.eg.db") # To obtain annotation of human sequences
+library("stats")
 GSEA <- function(gsetcollection, statistic, identifiers = NULL, 
                  method = "simple") {
   if (is.null(names(statistic)) & !is.null(identifiers)) {
@@ -117,10 +118,10 @@ To evaluate the weight of the ductular reaction in the alcoholic liver disease p
 
 ```{r load_DR}
 DRs <- read.csv("DR_PosVsNeg.csv")
+DRs <- DRs[order(abs(DRs$logFC), DRs$adj.P.Val, decreasing = c(TRUE, FALSE), method = "radix"), ]
 FC <- DRs$logFC
 names(FC) <- DRs$Symbol
 FC <- FC[!duplicated(names(FC))]
-FC <- sort(FC, decreasing = TRUE)
 pFC <- FC[DRs$logFC > 0 & DRs$adj.P.Val < 0.05]
 nFC <- FC[DRs$logFC < 0 & DRs$adj.P.Val < 0.05]
 RD_signature_up <- DRs$Symbol[DRs$logFC > 0 & DRs$adj.P.Val < 0.05][1:100]
@@ -140,12 +141,11 @@ We can observe where are the genes differentially expressed in the ductular reac
 
 ```{r load_K}
 kendall <- read.csv("Kendall_ALD.csv")
+kendall <- kendall[order(abs(kendall$Tau), kendall$p.value, decreasing = c(TRUE, FALSE), method = "radix"), ]
 K <- kendall$Tau
 names(K) <- kendall$Symbol
-K.ok <- sort(K, decreasing = TRUE)
-K.ok <- K[kendall$p.value < 0.05]
-increasing <- K.ok > 0.5
-decreasing <- K.ok < -0.5
+increasing <- kendall$p.value < 0.05 & kendall$Tau > 0
+decreasing <- kendall$p.value < 0.05 & kendall$Tau < 0
 
 # We use the file downloaded from broad v5.2 
 # to obtain sets from the Kegg, Reactome database
@@ -233,13 +233,13 @@ plotEnrichment(geneIds(gs[["Positive_FC"]]), K) +
 We create gene sets of the genes with a progression of the expression in the disease and we use them to build the gene sets. One gene set for the ones that increase and another for the ones which decrease:
 
 ```{r K_sets}
-gs_iK <- GeneSet(unique(names(K.ok[increasing])), setName = "Increasing_K")
-gs_dK <- GeneSet(unique(names(K.ok[decreasing])), setName = "Decreasing_K")
-gs_tiK <- GeneSet(unique(names(K.ok[increasing][1:100])), 
+gs_iK <- GeneSet(unique(names(K[increasing])), setName = "Increasing_K")
+gs_dK <- GeneSet(unique(names(K[decreasing])), setName = "Decreasing_K")
+gs_tiK <- GeneSet(unique(names(K[increasing][1:100])), 
                  setName = "Top100_Increasing_K")
-gs_tdK <- GeneSet(unique(names(K.ok[decreasing][1:100])), 
+gs_tdK <- GeneSet(unique(names(K[decreasing][1:100])), 
                  setName = "Top100_Decreasing_K")
-gsc_K <- GeneSetCollection(gs_iK, gs_dK, gs_tik, gs_tdk)
+gsc_K <- GeneSetCollection(gs_iK, gs_dK, gs_tiK, gs_tdK)
 gsc_K <- mapIdentifiers(gsc_K, SymbolIdentifier("org.Hs.eg.db"))
 save(gs, gsc_K, gsc_early, gsc_late, meanExpr_K, K, DRs, FC, file = "Gene_sets.RData")
 ```
@@ -285,6 +285,10 @@ plotEnrichment(geneIds(gs[["Increasing_K"]]), FC) +
   ggtitle("Increasing K")
 plotEnrichment(geneIds(gs[["Decreasing_K"]]), FC) +
   ggtitle("Decreasing K")
+plotEnrichment(geneIds(gs[["Top100_Increasing_K"]]), FC) +
+  ggtitle("Top 100 Increasing K")
+plotEnrichment(geneIds(gs[["Top100_Decreasing_K"]]), FC) +
+  ggtitle("Top 100 Decreasing K")
 ```
 
 We can test if there are differences in the way each gene set interacts within each gene set in each group:
@@ -318,14 +322,11 @@ After analysing numerically the relationship between these sets and the statisti
 
 ```{r plot_K_in_FC}
 index <- ids2indices(geneIds(gs), names(FC))
-barcodeplot(FC, index = index[["Increasing_K"]], 
-            index2 = index[["Decreasing_K"]], sub = "(logFC)",
-            main = "Progressive genes in the ductular reaction")
 barcodeplot(DRs$t, index = index[["Increasing_K"]], 
             index2 = index[["Decreasing_K"]], sub = "(t)",
             main = "Progressive genes in the ductular reaction")
-barcodeplot(DRs$AveExpr, index = index[["Increasing_K"]], 
-            index2 = index[["Decreasing_K"]], sub = "(AveExpr)",
+barcodeplot(DRs$t, index = index[["Top100_Increasing_K"]], 
+            index2 = index[["Top100_Decreasing_K"]], sub = "(t)",
             main = "Progressive genes in the ductular reaction")
 ```
 
@@ -361,7 +362,7 @@ In order to know which gene sets are differentially expressed in dhe ductular re
 
 ```{r gsva_FC}
 library("GSVA") # To perform a variation set analysis.
-GSexpr <- gsva(exprs(DR), gs_Refseq, rnaseq = TRUE, min.sz = 5, verbose = FALSE)
+GSexpr <- gsva(v$E, gs_Refseq, rnaseq = TRUE, min.sz = 5, verbose = FALSE)
 fit3 <- lmFit(GSexpr$es.obs, design)
 fit3.2 <- contrasts.fit(fit3, contrasts)
 fit3.2 <- eBayes(fit3.2)
@@ -461,6 +462,14 @@ fisher.test(contingency(gsc_K[["Increasing_K"]], RD_signature_dw, size_DR),
 fisher.test(contingency(gsc_K[["Decreasing_K"]], RD_signature_up, size_DR),
             alternative = "less")
 fisher.test(contingency(gsc_K[["Decreasing_K"]], RD_signature_dw, size_DR))
+fisher.test(contingency(gsc_K[["Top100_Increasing_K"]],
+                        RD_signature_up, size_DR), alternative = "greater")
+fisher.test(contingency(gsc_K[["Top100_Increasing_K"]],
+                        RD_signature_dw, size_DR), alternative = "less")
+fisher.test(contingency(gsc_K[["Top100_Decreasing_K"]],
+                        RD_signature_up, size_DR), alternative = "less")
+fisher.test(contingency(gsc_K[["Top100_Decreasing_K"]],
+                        RD_signature_dw, size_DR), alternative = "greater")
 ```
 
 ## On each phases
@@ -536,8 +545,9 @@ fgsea.plot(fgseaRes)
 
 We can also observe how are each gene set differentially expressed, including those obtained from the microdissection:
 ```{r gsva_ALD}
-GSexpr <- gsva(exprs(ALD), gs, rnaseq = TRUE, min.sz = 5, verbose = FALSE)
-fit4 <- lmFit(GSexpr$es.obs, design)
+GSexpr <- gsva(v1$E, gs, rnaseq = TRUE, min.sz = 5, verbose = FALSE)
+desgin_es <- design
+fit4 <- lmFit(GSexpr$es.obs, design_es)
 fit4.2 <- contrasts.fit(fit4, contrasts0)
 fit4.2 <- eBayes(fit4.2)
 results <- decideTests(fit4.2, adjust.method = "BH", lfc = 0)
@@ -595,7 +605,8 @@ pt.AHsevere <- read.csv("fgsea_ASH.csv")
 extract_RD <- function(gsea) {
   gsea[c(grep("Positive_FC", gsea[, "pathway"]),
          grep("Negative_FC", gsea[, "pathway"]),
-         grep("creasing_K", gsea[, "pathway"])), c(1, 3, 5)]
+         grep("Increasing_K", gsea[, "pathway"]),
+         grep("Decreasing_K", gsea[, "pathway"])), c(1, 3, 5)]
 }
 # Excract the data
 pt.RD.ASH <- extract_RD(pt.ASH)
@@ -609,11 +620,11 @@ pt.RD.AH <- cbind(pt.RD.AH, Phase = "AH")
 pt.RD.AHsevere <- cbind(pt.RD.AHsevere, Phase = "AHsevere")
 # Join data
 DR_progress <- rbind(pt.RD.ASH, pt.RD.Cirr, pt.RD.AH, pt.RD.AHsevere)
-colnames(DR_progress) <- c("Gene_sets", "logFC", "adj.P.Val", "Phase")
+colnames(DR_progress) <- c("Gene_sets", "padj", "NES", "Phase")
 # Plotting
-ggplot(DR_progress) + geom_point(aes(x = Phase, y = NES, group = pathway, 
-                                     color = pathway, size = padj)) + 
-  geom_line(aes(x = Phase, y = NES, group = pathway, color = pathway)) +
+ggplot(DR_progress) + geom_point(aes(x = Phase, y = NES, group = Gene_sets, 
+                                     color = Gene_sets, size = padj)) + 
+  geom_line(aes(x = Phase, y = NES, group = Gene_sets, color = Gene_sets)) +
   labs(title = "Enrichment scores in each phase") + theme_bw()
 ```
 
@@ -697,7 +708,7 @@ ggplot(DR_progress) + geom_point(aes(x = Phase, y = logFC, group = Gene_sets,
 ```
 
 
-```{r plotting_RDsets_FC}
+```{r plotting_RDsets_phases_FC}
 fc.Cirr.ASH <- read.csv("gs_CirrhosisVsASH.csv")
 fc.AH.Cirr <- read.csv("gs_AHvsCirrhosis.csv")
 fc.AHs.AH <- read.csv("gs_SevereVsHepatitis.csv")
