@@ -1,0 +1,221 @@
+---
+title: "Mice model"
+author: "[Lluís Revilla](mailto:lrevilla@clinic.cat)"
+date: "`r Sys.Date()`"
+output:
+  BiocStyle::html_document:
+    toc: true
+  BiocStyle::pdf_document:
+    toc: true
+---
+
+```{r setup, echo=FALSE, results="asis", message=FALSE}
+knitr::opts_chunk$set(tidy = FALSE, echo = TRUE, cache = TRUE, autodep = TRUE)
+```
+
+# load
+
+```{r read}
+mice <- read.csv("../data/mice_microarrays.csv")
+ddc_up <- mice$Symbol[mice$fc_DDC..vs..SA. > 1.5]
+ddc_up <- toupper(as.character(ddc_up))
+ddc_dw <- mice$Symbol[mice$fc_DDC..vs..SA. < -1.5]
+ddc_dw <- toupper(as.character(ddc_dw))
+```
+We can check the enrichment of the modules from the human data set
+```{r gsea}
+myTval <- mice$t_comparison5
+names(myTval) <- toupper(mice$Symbol)
+load("Gene_sets.RData", verbose = TRUE)
+library("fgsea")
+paths <- list(Top_Positive_FC = geneIds(gs[["Top_Positive_FC"]]), 
+           Top_Negative_FC = geneIds(gs[["Top_Negative_FC"]]), 
+           Top100_Increasing_K = geneIds(gsc_K[["Top100_Increasing_K"]]),
+           Top100_Decreasing_K = geneIds(gsc_K[["Top100_Decreasing_K"]]),
+           early_darkgreen = geneIds(gs[["early_darkgreen"]]),
+           late_black = geneIds(gs[["late_black"]]))
+
+fgseaRes <- fgsea(pathways = paths, stats = myTval, 
+                  nperm = 1000)
+plotEnrichment(geneIds(gs[["Top_Positive_FC"]]), myTval) +
+  ggtitle("Positive FC in DR")
+plotEnrichment(geneIds(gs[["Top_Negative_FC"]]), myTval) +
+  ggtitle("Negative FC in DR")
+plotEnrichment(geneIds(gs[["late_black"]]), myTval) +
+  ggtitle("Black Module")
+plotEnrichment(geneIds(gs[["early_darkgreen"]]), myTval) +
+  ggtitle("Early darkgreen")
+plotEnrichment(geneIds(gsc_K[["Top100_Increasing_K"]]), myTval) +
+  ggtitle("Increasing K")
+plotEnrichment(geneIds(gsc_K[["Top100_Decreasing_K"]]), myTval) +
+  ggtitle("Decreasing K")
+```
+
+# Reactome
+```{r}
+entrez_up <- mapIds(org.Hs.eg.db, keys = toupper(as.character(ddc_up)), 
+                    keytype = "SYMBOL", column = "ENTREZID")
+entrez_chip <- mapIds(org.Hs.eg.db, keys = toupper(as.character(mice$Symbol)), 
+                      keytype = "SYMBOL", column = "ENTREZID")
+reactome_enrich <- enrichPathway(gene = entrez_up,
+                                 universe = entrez_chip,
+                                 pvalueCutoff = 0.05, readable = TRUE,
+                                 minGSSize = 2, maxGSSize = 2000)
+write.csv(as.data.frame(reactome_enrich), file = "reactome_DDC_up.csv", row.names = FALSE)
+```
+
+# Kegg
+```{r}
+library("clusterProfiler")
+kegg_enrich <- enrichKEGG(entrez_up,
+                          universe = entrez_chip,
+                          minGSSize = 2, maxGSSize = 2000)
+write.csv(as.data.frame(kegg_enrich), file = "kegg_DDC_up.csv", row.names = FALSE)
+```
+
+# topGO
+
+```{r topGO}
+library("org.Hs.eg.db")
+library("org.Mm.eg.db")
+genes <-  mice$fc_DDC..vs..SA.
+names(genes) <- toupper(mice$Symbol)
+topGOdata_ddc <- new("topGOdata",
+                 ontology = "BP",
+                 allGenes = genes,
+                 geneSelectionFun = function(x) {
+                   x > 1.5},
+                 description = "GO of Mice",
+                 annot = annFUN.org,
+                 # Even if it is mice it is annotated with human genes names
+                 mapping = "org.Hs.eg.db",
+                 ID = "symbol"
+                 )
+```
+
+```{r GOtest}
+resultFisher <- runTest(topGOdata_ddc, algorithm = "classic", statistic = "fisher")
+weight01 <- runTest(topGOdata_ddc, algorithm = 'weight01', statistic = "ks")
+resultKS.elim <- runTest(topGOdata_ddc, algorithm = "elim", statistic = "ks")
+allRes <- GenTable(topGOdata_ddc, weight01 = weight01,
+                   elim = resultKS.elim, classic = resultFisher, 
+                   topNodes = 50, numChar = 1000)
+write.csv(allRes, "GO_function_DDC_up.csv")
+```
+
+# topGO for other datasets
+```{r topGO3}
+rm(list=ls())
+DR_topGO <- new("topGOdata",
+                 ontology = "BP",
+                 allGenes = genes,
+                 geneSelectionFun = function(x) {
+                   x > 4},
+                 description = "GO of DR",
+                 annot = annFUN.org,
+                 mapping = "org.Hs.eg.db",
+                 ID = "symbol"
+                 )
+```
+
+```{r GOtest3}
+resultFisher <- runTest(DR_topGO, algorithm = "classic", statistic = "fisher")
+weight01 <- runTest(DR_topGO, algorithm = 'weight01', statistic = "ks")
+resultKS.elim <- runTest(DR_topGO, algorithm = "elim", statistic = "ks")
+allRes <- GenTable(DR_topGO, weight01 = weight01,
+                   elim = resultKS.elim, classic = resultFisher, 
+                   topNodes = 50, numChar = 1000)
+write.csv(allRes, "GO_function_DR_up.csv")
+```
+
+```{r topGO4}
+rm(list = ls())
+load("Gene_sets.RData", verbose = TRUE)
+genes <- as.character(unlist(geneIds(gsc_early)))
+d <- as.factor(as.numeric(genes %in% geneIds(gsc_early[["early_darkgreen"]])))
+names(d) <- genes
+early_topGO <- new("topGOdata",
+                 ontology = "BP",
+                 allGenes = d,
+                 description = "GO of early_darkgreen",
+                 annot = annFUN.org,
+                 mapping = "org.Hs.eg.db",
+                 ID = "symbol"
+                 )
+```
+
+```{r GOtest4}
+resultFisher <- runTest(early_topGO, algorithm = "classic", statistic = "fisher")
+weight01 <- runTest(early_topGO, algorithm = 'weight01', statistic = "ks")
+resultKS.elim <- runTest(early_topGO, algorithm = "elim", statistic = "ks")
+allRes <- GenTable(early_topGO, weight01 = weight01,
+                   elim = resultKS.elim, classic = resultFisher, 
+                   topNodes = 50, numChar = 1000)
+write.csv(allRes, "GO_function_early_darkgreen.csv")
+```
+
+```{r topGO5}
+rm(list = ls())
+load("Gene_sets.RData", verbose = TRUE)
+genes <- as.character(unlist(geneIds(gsc_late)))
+d <- as.factor(as.numeric(genes %in% geneIds(gsc_late[["late_black"]])))
+names(d) <- genes
+late_topGO <- new("topGOdata",
+                 ontology = "BP",
+                 allGenes = d,
+                 description = "GO of early_darkgreen",
+                 annot = annFUN.org,
+                 mapping = "org.Hs.eg.db",
+                 ID = "symbol"
+                 )
+```
+
+```{r GOtest4}
+resultFisher <- runTest(late_topGO, algorithm = "classic", statistic = "fisher")
+weight01 <- runTest(late_topGO, algorithm = 'weight01', statistic = "ks")
+resultKS.elim <- runTest(late_topGO, algorithm = "elim", statistic = "ks")
+allRes <- GenTable(late_topGO, weight01 = weight01,
+                   elim = resultKS.elim, classic = resultFisher, 
+                   topNodes = 50, numChar = 1000)
+write.csv(allRes, "GO_function_late_black.csv")
+```
+
+Function to perform a cloud word image:
+```{r cloudfunction}
+library("tm")
+library("SnowballC")
+library("wordcloud")
+library("RColorBrewer")
+cloud <- function(text) {
+  wordCorpus <- Corpus(VectorSource(text))
+  wordCorpus <- tm_map(wordCorpus, removePunctuation)
+  wordCorpus <- tm_map(wordCorpus, content_transformer(tolower))
+  wordCorpus <- tm_map(wordCorpus, removeWords, stopwords("english"))
+  wordCorpus <- tm_map(wordCorpus, stripWhitespace)
+  wordCorpus <- tm_map(wordCorpus, stemDocument)
+  pal <- brewer.pal(9,"YlGnBu")
+  pal <- pal[-(1:4)]
+  wordcloud(words = wordCorpus, scale = c(8, 0.5), max.words = 1000, 
+            random.order = FALSE, rot.per = 0.1, use.r.layout = FALSE, 
+            colors = pal)
+}
+react <- read.csv("Reactome_DR.csv")
+cloud(react$Description)
+react_dw <- read.csv("Reactome_down_DR.csv")
+cloud(react_dw$Description)
+react_up <- read.csv("Reactome_up_DR.csv")
+cloud(react_up$Description)
+go <- read.csv("GO_DR_up.csv")
+cloud(go$Term)
+go <- read.csv("GO_DR_down.csv")
+cloud(go$Term)
+react_up <- read.csv("reactome_DDC_up.csv")
+cloud(react_up$Description)
+
+```
+
+# SessionInfo
+
+```{r sessionInfo}
+sessionInfo()
+```
