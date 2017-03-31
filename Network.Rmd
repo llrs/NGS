@@ -21,8 +21,8 @@ You can find the other steps of the study [here](index.html).
 # Load data
 We start from the expression data we previously normalized for the differential gene expression analysis.
 ```{r load, collapse = TRUE}
-load(file = "Expression_ALD.RData", verbose = TRUE)
 load("ALD.RData", verbose = TRUE)
+load(file = "Expression_ALD.RData", verbose = TRUE)
 library("WGCNA")
 ```
 Of the second file we are only interested in the design2 object.
@@ -32,6 +32,9 @@ Firt we convert it to the format WGCNA requires (each row a sample, each column 
 ```{r transpose}
 data.wgcna <- t(v1$E)
 vclin0 <- design2[, "Progression", drop = FALSE]
+vclin0 <- merge(vclin0, pData(ALD), by.x = "row.names", by.y = "row.names")
+rownames(vclin0) <- vclin0[, "Row.names"]
+vclin0 <- vclin0[, -c(1, 3, 4)]
 ```
 We will make several data sets:
 
@@ -41,8 +44,8 @@ We will make several data sets:
  - To observe if there are co-expressed genes in the disease, another data set with all the patients from alcoholic steathosis to severe hepatitis.
  
 ```{r filter}
-early.patients <- phenoData$Status %in% c("ASH", "C.Comp")
-late.patients <- phenoData$Status %in% c("AH", "Responders", "Non-responders")
+early.patients <- pData(ALD)$Status %in% c("ASH", "C.Comp")
+late.patients <- pData(ALD)$Status %in% c("AH", "Responders", "Non-responders")
 early.ALD <- data.wgcna[early.patients, ]
 late.ALD <- data.wgcna[late.patients, ]
 patients <- data.wgcna[late.patients | early.patients, ]

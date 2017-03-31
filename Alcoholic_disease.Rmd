@@ -48,6 +48,27 @@ levels(phenoData$Status) <- c("AH", "Non-responders", "Responders", "C.Comp",
                               "ASH", "Explants", "HCV", "NASH", "Normal")
 phenoData
 ```
+We can add more phenotipic data from the clinical variables we have measures:
+
+```{r clinic}
+clin_var <- read.csv("../data/DeepSeq_ClinicalData_all.csv", 
+              na.strings = c("", "NA", "Err:512"), strip.white = TRUE)
+```
+
+As the data is split in several pieces we need to merge it, but as we are only interested in some colums first we subset:
+
+```{r subset_clinic}
+clin_var <- clin_var[, c(1, 10, 11, 15:18, 21, 26:30, 61, 95, 97:105, 138)]
+colnames(clin_var)[14] <- "Peso"
+```
+
+Now we subset which samples do we have in our expression data:
+```{r match_expr}
+phenoData <- merge(phenoData, clin_var, by.x = "row.names", by.y = "deep_id")
+rownames(phenoData) <- phenoData$Row.names
+phenoData <- phenoData[, -1]
+```
+
 However we are only interested on those related to alcohol disease, so we need to subset them:
 ```{r sub}
 alcohol <- !phenoData$Status %in% c("HCV", "NASH", "Explants")
@@ -107,14 +128,13 @@ multidensity(expression, main = "Densities of expression", legend = NULL)
 avgexp <- rowMeans(expression)
 hist(avgexp, main = "Histogram of mean expression per gene")
 ```
-Now are a little bit more comparable.  
-To work easier with the data I proceed to create an ExpressionSet
+Now are a little bit more comparable. To work easier with the data I proceed to create an ExpressionSet
 
 ```{r ESet, message = FALSE}
 library("Biobase")
 library("AnnotationDbi")
 ALD <- ExpressionSet(as.matrix(expression))
-phenoData(ALD) <- AnnotatedDataFrame(droplevels(phenoData))
+pData(ALD) <- phenoData
 ALD
 ```
 
@@ -127,7 +147,7 @@ plotMDS(ALD, top = Inf, labels = phenoData(ALD)$Status, main = "Samples relation
 
 We can see that they are clearly separated in two groups, but some samples like the Alcohol Hepatitis samples are on both sites of the first dimension. We can also observe that the cirrhosis compensated samples are closer to the normal or healthy samples.  
 
-#Design 
+# Design 
 
 We are interested in the progression of the disease, both how does the expression of genes change in each step, and the overall change that leads the disease. 
 
@@ -139,7 +159,7 @@ design <- sapply(names, function(x){
   x <- ifelse(x == "Non.responders", "Non-responders", x)
   ifelse(phenoData(ALD)$Status == x, 1, 0)
 })
-rownames(design) <- rownames(phenoData(ALD))
+rownames(design) <- rownames(pData(ALD))
 design
 ```
 

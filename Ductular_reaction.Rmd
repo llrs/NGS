@@ -251,9 +251,9 @@ We can see in Reactome which pathways are enriched for those genes, that are sig
 ```{r reactome, collapse=TRUE, fig.width = 20, fig.height = 20}
 library("ReactomePA")
 library("clusterProfiler")
-DEG_up <- mapIds(org.Hs.eg.db, keys = rownames(signif[signif$logFC > 0L, ]), 
+DEG_up <- mapIds(org.Hs.eg.db, keys = rownames(signif[signif$logFC > 1L, ]), 
                  keytype = "REFSEQ", column = "ENTREZID")
-DEG_down <- mapIds(org.Hs.eg.db, keys = rownames(signif[signif$logFC < 0L, ]),
+DEG_down <- mapIds(org.Hs.eg.db, keys = rownames(signif[signif$logFC < 1L, ]),
                    keytype = "REFSEQ", column = "ENTREZID")
 groups <- list(Up = DEG_up, Down = DEG_down)
 cc <- compareCluster(groups, fun = "enrichPathway")
@@ -269,9 +269,9 @@ enrich_up <- enrichPathway(DEG_up, minGSSize = 2, maxGSSize = 2000)
 enrich_down <- enrichPathway(DEG_down, minGSSize = 2, maxGSSize = 2000)
 write.csv(as.data.frame(enrich), file = "Reactome_DR.csv", 
           row.names = FALSE, na = "")
-write.csv(as.data.frame(enrich_up), file = "Reactome_up_DR.csv", 
+write.csv(as.data.frame(enrich_up), file = "Reactome_DR_up_fc2.csv", 
           row.names = FALSE, na = "")
-write.csv(as.data.frame(enrich_down), file = "Reactome_down_DR.csv", 
+write.csv(as.data.frame(enrich_down), file = "Reactome_DR_down_fc2.csv", 
           row.names = FALSE, na = "")
 dotplot(enrich)
 enrichMap(enrich, layout = igraph::layout_nicely,

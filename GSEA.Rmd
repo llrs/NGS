@@ -120,14 +120,15 @@ To evaluate the weight of the ductular reaction in the alcoholic liver disease p
 DRs <- read.csv("DR_PosVsNeg.csv")
 DRs <- DRs[order(abs(DRs$logFC), DRs$adj.P.Val, decreasing = c(TRUE, FALSE), method = "radix"), ]
 FC <- DRs$t
-names(FC) <- DRs$Symbol
+names(FC) <- as.character(DRs$Symbol)
+DRs$Symbol <- as.character(DRs$Symbol)
 FC <- FC[!duplicated(names(FC))]
 pFC <- FC[DRs$logFC > 0 & DRs$adj.P.Val < 0.05]
 nFC <- FC[DRs$logFC < 0 & DRs$adj.P.Val < 0.05]
 RD_signature_up <- DRs$Symbol[DRs$logFC > 4 & DRs$adj.P.Val < 0.05]
 RD_signature_dw <- DRs$Symbol[DRs$logFC < -4 & DRs$adj.P.Val < 0.05]
-RD_up <- DRs$Symbol[DRs$logFC >= 2 & DRs$adj.P.Val < 0.05]
-RD_dw <- DRs$Symbol[DRs$logFC < -2 & DRs$adj.P.Val < 0.05]
+RD_up <- DRs$Symbol[DRs$logFC >= 1 & DRs$adj.P.Val < 0.05]
+RD_dw <- DRs$Symbol[DRs$logFC < -1 & DRs$adj.P.Val < 0.05]
 gst_pFC <- GeneSet(as.character(RD_signature_up), setName = "Top_Positive_FC",
                    geneIdType = SymbolIdentifier("org.Hs.eg.db"))
 gst_nFC <- GeneSet(as.character(RD_signature_dw), setName = "Top_Negative_FC",
@@ -196,7 +197,7 @@ plotEnrichment(geneIds(gs[[topPathways[20]]]), K) +
 ```
 We have calculated the enrichment using the scores 
 
-```{r piano}
+```{r piano, eval = FALSE}
 library("piano")
 GeneSetCollection2GSC <- function(gsc, addInfo = "none") {
   GSC <- list("gsc" = geneIds(gsc), "addInfo" = addInfo)
@@ -252,24 +253,24 @@ We can observe the enrichment in the ductular reaction of the previous gene sets
 Assuming the independence of the genes in each data set:
 ```{r gsea_FC}
 gs <- GeneSetCollection(c(c2BroadSets, gsc_late, gsc_early, gsc_K))
-meanExpr <- GSEA(gs, DRs$t, DRs$Symbol)
-write.csv(meanExpr, "GSEA_meanExpr_DR_t.csv")
-head(meanExpr)
-meanExpr <- GSEA(gs, DRs$AveExpr, DRs$Symbol)
-write.csv(meanExpr, "GSEA_meanExpr_DR_AveExpr.csv")
-head(meanExpr)
-meanExpr <- GSEA(gs, FC)
-write.csv(meanExpr, "GSEA_meanExpr_DR_logFC.csv")
-head(meanExpr)
-scaleExpr <- GSEA(gs, DRs$t, DRs$Symbol, method = "category")
-write.csv(scaleExpr, "GSEA_scaleExpr_DR_t.csv")
-head(scaleExpr)
-scaleExpr <- GSEA(gs, DRs$AveExpr, DRs$Symbol, method = "category")
-write.csv(scaleExpr, "GSEA_scaleExpr_DR_AveExpr.csv")
-head(scaleExpr)
-scaleExpr <- GSEA(gs, FC, method = "category")
-# scaleExpr[scaleExpr$`p-value` < 0.05, ]
-write.csv(scaleExpr, "GSEA_scaleExpr_DR_logFC.csv")
+# meanExpr <- GSEA(gs, DRs$t, DRs$Symbol)
+# write.csv(meanExpr, "GSEA_meanExpr_DR_t.csv")
+# head(meanExpr)
+# meanExpr <- GSEA(gs, DRs$AveExpr, DRs$Symbol)
+# write.csv(meanExpr, "GSEA_meanExpr_DR_AveExpr.csv")
+# head(meanExpr)
+# meanExpr <- GSEA(gs, FC)
+# write.csv(meanExpr, "GSEA_meanExpr_DR_logFC.csv")
+# head(meanExpr)
+# scaleExpr <- GSEA(gs, DRs$t, DRs$Symbol, method = "category")
+# write.csv(scaleExpr, "GSEA_scaleExpr_DR_t.csv")
+# head(scaleExpr)
+# scaleExpr <- GSEA(gs, DRs$AveExpr, DRs$Symbol, method = "category")
+# write.csv(scaleExpr, "GSEA_scaleExpr_DR_AveExpr.csv")
+# head(scaleExpr)
+# scaleExpr <- GSEA(gs, FC, method = "category")
+# # scaleExpr[scaleExpr$`p-value` < 0.05, ]
+# write.csv(scaleExpr, "GSEA_scaleExpr_DR_logFC.csv")
 
 fgseaRes <- fgsea(pathways = geneIds(gs), stats = FC, minSize = 15, 
                  maxSize = Inf, nperm = 1000)
@@ -283,6 +284,8 @@ topPathways <- c(topPathwaysUp, rev(topPathwaysDown))
 plotGseaTable(geneIds(gs)[topPathways], FC, fgseaRes, gseaParam = 0.5)
 plotEnrichment(geneIds(gs[[topPathways[1]]]), FC) +
   ggtitle(topPathways[1])
+plotEnrichment(geneIds(gs[["early_darkred"]]), FC) +
+  ggtitle("early_darkred")
 plotEnrichment(geneIds(gs[[topPathways[20]]]), FC) +
   ggtitle(topPathways[20])
 plotEnrichment(geneIds(gs[["Increasing_K"]]), FC) +
@@ -385,21 +388,21 @@ index <- ids2indices(geneIds(gsc_network), rownames(tt))
 stats <- tt$t
 names(stats) <- rownames(tt)
 
-meanExpr <- GSEA(gsc_network, tt$t, rownames(tt))
-write.csv(meanExpr, "GSEA_meanExpr_t_gs.csv")
-head(meanExpr)
-meanExpr <- GSEA(gsc_network, tt$logFC, rownames(tt))
-write.csv(meanExpr, "GSEA_meanExpr_logFC_gs.csv")
-meanExpr <- GSEA(gsc_network, tt$AveExpr, rownames(tt))
-write.csv(meanExpr, "GSEA_meanExpr_AveExpr_gs.csv")
-
-scaleExpr <- GSEA(gsc_network, tt$t, rownames(tt), method = "category")
-write.csv(scaleExpr, "GSEA_scaleExpr_t_gs.csv")
-head(scaleExpr)
-scaleExpr <- GSEA(gsc_network, tt$logFC, rownames(tt), method = "category")
-write.csv(scaleExpr, "GSEA_scaleExpr_logFC_gs.csv")
-scaleExpr <- GSEA(gsc_network, tt$AveExpr, rownames(tt), method = "category")
-write.csv(scaleExpr, "GSEA_scaleExpr_AveExpr_gs.csv")
+# meanExpr <- GSEA(gsc_network, tt$t, rownames(tt))
+# write.csv(meanExpr, "GSEA_meanExpr_t_gs.csv")
+# head(meanExpr)
+# meanExpr <- GSEA(gsc_network, tt$logFC, rownames(tt))
+# write.csv(meanExpr, "GSEA_meanExpr_logFC_gs.csv")
+# meanExpr <- GSEA(gsc_network, tt$AveExpr, rownames(tt))
+# write.csv(meanExpr, "GSEA_meanExpr_AveExpr_gs.csv")
+# 
+# scaleExpr <- GSEA(gsc_network, tt$t, rownames(tt), method = "category")
+# write.csv(scaleExpr, "GSEA_scaleExpr_t_gs.csv")
+# head(scaleExpr)
+# scaleExpr <- GSEA(gsc_network, tt$logFC, rownames(tt), method = "category")
+# write.csv(scaleExpr, "GSEA_scaleExpr_logFC_gs.csv")
+# scaleExpr <- GSEA(gsc_network, tt$AveExpr, rownames(tt), method = "category")
+# write.csv(scaleExpr, "GSEA_scaleExpr_AveExpr_gs.csv")
 
 c_gs <- camera(GSexpr$es.obs, index, design, c(-1, 1, 0), 
                allow.neg.cor = TRUE, inter.gene.cor = NA)
@@ -419,6 +422,11 @@ barcodeplot(tt$t, index = index[[1]], index2 = index[[2]],
             main = "Early and Late networks in the DR", sub = "(t)")
 barcodeplot(tt$logFC, index = index[[1]], index2 = index[[2]], 
             main = "Early and Late networks in the DR", sub = "(logFC)")
+t.FC <- tt$t
+names(t.FC) <- rownames(tt)
+plotEnrichment(geneIds(gsc_e), t.FC ) + ggtitle("Early in DR")
+plotEnrichment(geneIds(gsc_l), t.FC ) + ggtitle("Late in DR")
+fgsea(geneIds(gsc_network), t.FC, nperm = 1000)
 ```
 
 ## On the gene sets
@@ -583,108 +591,412 @@ fgsea.test(gsc_network, tt.AH.Cirr, "t", "gs_fgsea_AH.Cirr.csv")
 fgsea.test(gsc_network, tt.AHsevere.AH, "t", "fgsea_AHsevere.AH.csv")
 ```
 
-## Networks in the DR
+## Networks gene set in the progression
 
 We can plot how do the group of genes relate in each phase
 ```{r late_early_phases}
-grep("late_", names(gs))
+
 gsc_e <- GeneSet(names(gsc_early), setName = "Early_network")
 gsc_l <- GeneSet(names(gsc_late), setName = "Late_network")
 gsc_network <- GeneSetCollection(gsc_e, gsc_l)
-index <- ids2indices(geneIds(gsc_network), rownames(tt))
-plotEnrichment(gsc_e, tt.ASH$t) + ggtitle("Early in ASH")
-plotEnrichment(gsc_e, tt.Cirr$t) + ggtitle("Early in Cirr")
-plotEnrichment(gsc_e, tt.AH$t) + ggtitle("Early in AH")
-plotEnrichment(gsc_e, tt.AHsevere$t) + ggtitle("Early in AH severe")
 
-plotEnrichment(gsc_l, tt.ASH$t) + ggtitle("Early in ASH")
-plotEnrichment(gsc_l, tt.Cirr$t) + ggtitle("Late in Cirr")
-plotEnrichment(gsc_l, tt.AH$t) + ggtitle("Late in AH")
-plotEnrichment(gsc_l, tt.AHsevere$t) + ggtitle("LAte in AH severe")
+t.ASH <- tt.ASH$t
+names(t.ASH) <- rownames(tt.ASH)
+plotEnrichment(geneIds(gsc_e), t.ASH ) + ggtitle("Early in ASH")
+t.Cirr <- tt.Cirr$t
+names(t.Cirr) <- rownames(tt.Cirr)
+plotEnrichment(geneIds(gsc_e), t.Cirr) + ggtitle("Early in Cirr")
+t.AH <- tt.AH$t
+names(t.AH) <- rownames(tt.AH)
+plotEnrichment(geneIds(gsc_e), t.AH) + ggtitle("Early in AH")
+t.AHsevere <- tt.AHsevere$t
+names(t.AHsevere) <- rownames(tt.AHsevere)
+plotEnrichment(geneIds(gsc_e), t.AHsevere) + ggtitle("Early in AH severe")
+
+
+plotEnrichment(geneIds(gsc_l), t.ASH) + ggtitle("Late in ASH")
+plotEnrichment(geneIds(gsc_l), t.Cirr) + ggtitle("Late in Cirr")
+plotEnrichment(geneIds(gsc_l), t.AH) + ggtitle("Late in AH")
+plotEnrichment(geneIds(gsc_l), t.AHsevere) + ggtitle("Late in AH severe")
 ```
 
+## Microdisection tops in progression
+
+```{r RD_top_phases}
+ASH <- read.csv("ASHvsNormal.csv")
+Cirr <- read.csv("CirrhosisVsNormal.csv")
+AH <- read.csv("AHvsNormal.csv")
+Severe <- read.csv("SevereVsNormal.csv")
+t <- ASH$t
+names(t) <- ASH$X
+plotEnrichment(geneIds(gs[["Top_Positive_FC"]]), t) + 
+  ggtitle("Top KRT7+ upregulated in ASH")
+t <- Cirr$t
+names(t) <- Cirr$X
+plotEnrichment(geneIds(gs[["Top_Positive_FC"]]), t) + 
+  ggtitle("Top KRT7+ upregulated in Cirr")
+t <- AH$t
+names(t) <- AH$X
+plotEnrichment(geneIds(gs[["Top_Positive_FC"]]), t) + 
+  ggtitle("Top KRT7+ upregulated in AH")
+t <- Severe$t
+names(t) <- Severe$X
+plotEnrichment(geneIds(gs[["Top_Positive_FC"]]), t) + 
+  ggtitle("Top KRT7+ upregulated in Severe")
+plotEnrichment(RD_up, t) + 
+  ggtitle("KRT7+ upregulated fc 2 in Severe")
+```
 
 # Progression of the DR
 
-We can se the evolution of the score of the same gene sets in the progression of the disease:
+The question we want to answer is how does this cells affect the progression of the disease, so lets visualize it.
 
+## Genes & logFC
+
+We can observe how the expression of the genes in the set from the ductular reaction change in each phase:
+```{r FC_genes_modules}
+fc.ASH <- read.csv("ASHvsNormal.csv")
+fc.Cirr <- read.csv("CirrhosisVsNormal.csv")
+fc.AH <- read.csv("AHvsNormal.csv")
+fc.AHsevere <- read.csv("SevereVsNormal.csv")
+extract_genes <- function(tt, Phase) {
+  orig <- tt$X %in% unique(c(as.character(RD_signature_up), 
+                             as.character(RD_signature_dw)))
+  df <- tt[orig, c(1, 2, 6)]
+  Group <- ifelse(df$X %in% RD_signature_up, "Top_Positive_FC",
+                  ifelse(df$X %in% RD_signature_dw, "Top_Negative_FC",
+                         "Unclassified"))
+  cbind(df, Group, Phase)
+}
+fc.N <- fc.ASH
+fc.N <- extract_genes(fc.N, "Healthy")
+fc.N$logFC <- 0
+fc.N$adj.P.Val <- 10 ^ (-10)
+fc.ASH <- extract_genes(fc.ASH, "ASH")
+fc.Cirr <- extract_genes(fc.Cirr, "Cirrhotic")
+fc.AH <- extract_genes(fc.AH, "AH")
+fc.AHsevere <- extract_genes(fc.AHsevere, "Severe AH")
+DR_progress_genes <- rbind(fc.N, fc.ASH, fc.Cirr, fc.AH, fc.AHsevere)
+colnames(DR_progress_genes) <- c("Gene", "logFC", "adj.P.Val", "Group", "Phase")
+gtRemove <- DR_progress_genes$Gene[DR_progress_genes$adj.P.Val > 0.05]
+DR_progress2 <- DR_progress_genes[!DR_progress_genes$Gene %in% gtRemove, ]
+DR_progress_genes$Group <- relevel(DR_progress_genes$Group, 
+                                   ref = "Top_Positive_FC")
+ggplot(DR_progress_genes) + 
+  geom_line(aes(x = Phase, y = logFC, group = Gene, color = Group)) +
+  geom_point(aes(x = Phase, y = logFC, group = Gene,
+                 color = Group, size = -log10(adj.P.Val))) +
+  # geom_line(aes(x = Phase, y = logFC, group = Gene, color = Group),
+  # alpha = 0.75) +
+  labs(title = "logFC of the genes in each gene set betweeen phases") +
+  theme_bw() + 
+  scale_size_area("-log10(adjusted p.value)") +
+  scale_colour_manual(name = "Gene set",
+                      breaks = c("Top_Positive_FC", "Top_Negative_FC"),
+                      labels = c("KRT7+ upregulated", "KRT7+ downregulated"),
+                      values = c("Top_Negative_FC" = "blue",
+                                 "Top_Positive_FC" = "green")) +
+  guides(colour = FALSE) +
+  facet_wrap(~Group, 
+             labeller = labeller(.default = label_value,
+               Group = c("Top_Positive_FC" = "KRT7+ upregulated",
+                         "Top_Negative_FC" = "KRT7+ downregulated"))) +
+  theme(strip.background = element_rect(fill = "white"), 
+        axis.text.x = element_text(angle = 45, hjust = 1))
+DR_progress_genes <- DR_progress_genes[DR_progress_genes$Group == "Top_Positive_FC", ]
+ggplot(DR_progress_genes) + 
+  geom_line(aes(x = Phase, y = logFC, group = Gene, color = Group)) +
+  geom_point(aes(x = Phase, y = logFC, group = Gene,
+                 color = Group, size = -log10(adj.P.Val))) +
+  # geom_line(aes(x = Phase, y = logFC, group = Gene, color = Group),
+  # alpha = 0.75) +
+  labs(title = "logFC of the genes in each gene set betweeen phases") +
+  theme_bw() + 
+  scale_size_area("-log10(adjusted p.value)") +
+  scale_colour_manual(name = "Gene set",
+                      breaks = c("Top_Positive_FC"),
+                      labels = c("KRT7+ upregulated"),
+                      values = c("Top_Positive_FC" = "green")) +
+  guides(colour = FALSE) +
+  # facet_wrap(~Group, 
+  #            labeller = labeller(.default = label_value,
+  #              Group = c("Top_Positive_FC" = "KRT7+ upregulated",
+  #                        "Top_Negative_FC" = "KRT7+ downregulated"))) +
+  theme(strip.background = element_rect(fill = "white"), 
+        axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+We can do the same for the early and late genes:
+
+```{r FC_genes_modules_wgcna}
+fc.ASH <- read.csv("ASHvsNormal.csv")
+fc.Cirr <- read.csv("CirrhosisVsNormal.csv")
+fc.AH <- read.csv("AHvsNormal.csv")
+fc.AHsevere <- read.csv("SevereVsNormal.csv")
+extract_genes <- function(tt, Phase) {
+  lb <- as.character(geneIds(gs[["late_brown"]]))
+  ed <- as.character(geneIds(gs[["early_darkred"]]))
+  orig <- tt$X %in% unique(c(lb, ed))
+  df <- tt[orig, c(1, 2, 6)]
+  Group <- ifelse(df$X %in% lb & df$X %in% ed, "Both",
+                  ifelse(df$X %in% ed, "early_darkred",
+                         ifelse(df$X %in% lb, "late_brown", "Misclassified")))
+  cbind(df, Group, Phase)
+}
+fc.N <- fc.ASH
+fc.N <- extract_genes(fc.N, "Norm")
+fc.N$logFC <- 0
+fc.N$adj.P.Val <- 10 ^ (-15)
+fc.ASH <- extract_genes(fc.ASH, "ASH")
+fc.Cirr <- extract_genes(fc.Cirr, "Cirr")
+fc.AH <- extract_genes(fc.AH, "AH")
+fc.AHsevere <- extract_genes(fc.AHsevere, "AHsevere")
+DR_progress <- rbind(fc.N, fc.ASH, fc.Cirr, fc.AH, fc.AHsevere)
+colnames(DR_progress) <- c("Gene", "logFC", "adj.P.Val", "Group", "Phase")
+levels(DR_progress$Group) <- c("early_darkred", "Both", "late_brown")
+gtRemove <- DR_progress$Gene[DR_progress$adj.P.Val > 0.05]
+DR_progress2 <- DR_progress[!DR_progress$Gene %in% gtRemove, ]
+ggplot(DR_progress) + 
+  geom_boxplot(aes(x = Phase, y = logFC), outlier.shape = NA) +
+  geom_point(aes(x = Phase, y = logFC, group = Gene,
+                 color = Group, size = -log10(adj.P.Val)), alpha = 0.5) +
+  # geom_line(aes(x = Phase, y = logFC, group = Gene, color = Group)) +
+  labs(title = "logFC of the genes in each gene set betweeen phases") +
+  theme_bw() + 
+  scale_size_area("-log10(adjusted p.value)") +
+  scale_colour_manual(name = "Gene set",
+                      labels = c("Both" = "Both", 
+                                 "late_brown" = "Brown module", 
+                                 "early_darkred" = "Darkred module"),
+                      values = c("Both" = "red",
+                                 "late_brown" = "brown",
+                                 "early_darkred" = "pink")) +
+  guides(colour = FALSE) +
+  facet_wrap(~ Group,
+             labeller = labeller(.default = label_value,
+               Group = c("late_brown" = "Late brown module",
+                         "Both" = "Genes in both modules",
+                         "early_darkred" = "Early darkred module"))) +
+  theme(strip.background = element_rect(fill = "white"),
+        axis.text.x = element_text(angle = 45, hjust = 1, vjust = 0.5))
+```
+We can see the change of the gene with the previous phase:
+
+```{r FC_genes_modules_inter}
+fc.ASH <- read.csv("ASHvsNormal.csv")
+fc.Cirr <- read.csv("CirrhosisVsASH.csv")
+fc.AH <- read.csv("AHvsCirrhosis.csv")
+fc.AHsevere <- read.csv("SevereVsHepatitis.csv")
+extract_genes <- function(tt, Phase) {
+  orig <- tt$X %in% unique(c(as.character(RD_signature_up), 
+                             as.character(RD_signature_dw)))
+  df <- tt[orig, c(1, 2, 6)]
+  Group <- ifelse(df$X %in% RD_signature_up, "Top_Positive_FC",
+                  ifelse(df$X %in% RD_signature_dw, "Top_Negative_FC",
+                         "Unclassified"))
+  cbind(df, Group, Phase)
+}
+fc.N <- fc.ASH
+fc.N <- extract_genes(fc.N, "Norm")
+fc.N$logFC <- 0
+fc.N$adj.P.Val <- 0
+fc.ASH <- extract_genes(fc.ASH, "ASHvsNormal")
+fc.Cirr <- extract_genes(fc.Cirr, "CirrVsASH")
+fc.AH <- extract_genes(fc.AH, "AHvsCirr")
+fc.AHsevere <- extract_genes(fc.AHsevere, "AHsevereVsAH")
+DR_progress <- rbind(fc.N, fc.ASH, fc.Cirr, fc.AH, fc.AHsevere)
+colnames(DR_progress) <- c("Gene", "logFC", "adj.P.Val", "Group", "Phase")
+ggplot(DR_progress) + 
+  geom_point(aes(x = Phase, y = sign(logFC)*2^(abs(logFC)), group = Gene, 
+                 color = Group, size = -log10(adj.P.Val))) + 
+  geom_line(aes(x = Phase, y = sign(logFC)*2^(abs(logFC)), group = Gene, color = Group)) +
+  labs(title = "FC of the genes in each gene set betweeen phases") +
+  ylab("FC") +
+  theme_bw() + 
+  facet_wrap(~ Group) + 
+  scale_size_area("-log10(adjusted p.value)") +
+  scale_color_discrete(name = "Gene set",
+                       breaks = c("Top_Negative_FC", "Top_Positive_FC"),
+                       labels = c("KRT7+ downregulated", "KRT7+ upregulated"))
+```
+
+
+```{r setd}
+brown <- geneIds(gs[["late_brown"]])
+sig <- geneIds(gs[["Top_Positive_FC"]])
+std <- sig[!sig %in% brown]
+fc.ASH <- read.csv("ASHvsNormal.csv")
+fc.Cirr <- read.csv("CirrhosisVsNormal.csv")
+fc.AH <- read.csv("AHvsNormal.csv")
+fc.AHsevere <- read.csv("SevereVsNormal.csv")
+extract_genes <- function(tt, Phase) {
+  df <- tt[tt$X %in% std, c(1, 2, 6)]
+  cbind(df, Group = "Signature_not_late", Phase)
+}
+fc.N <- fc.ASH
+fc.N <- extract_genes(fc.N, "Healthy")
+fc.N$logFC <- 0
+fc.N$adj.P.Val <- 10 ^ (-10)
+fc.ASH <- extract_genes(fc.ASH, "ASH")
+fc.Cirr <- extract_genes(fc.Cirr, "Cirrhotic")
+fc.AH <- extract_genes(fc.AH, "AH")
+fc.AHsevere <- extract_genes(fc.AHsevere, "Severe AH")
+DR_progress_genes <- rbind(fc.N, fc.ASH, fc.Cirr, fc.AH, fc.AHsevere)
+colnames(DR_progress_genes) <- c("Gene", "logFC", "adj.P.Val", "Group", "Phase")
+gtRemove <- DR_progress_genes$Gene[DR_progress_genes$adj.P.Val > 0.05]
+DR_progress2 <- DR_progress_genes[!DR_progress_genes$Gene %in% gtRemove, ]
+DR_progress_genes$Group <- relevel(DR_progress_genes$Group, 
+                                   ref = "Signature_not_late")
+ggplot(DR_progress_genes) + 
+  geom_line(aes(x = Phase, y = logFC, group = Gene, color = Group)) +
+  geom_point(aes(x = Phase, y = logFC, group = Gene,
+                 color = Group, size = -log10(adj.P.Val))) +
+  # geom_line(aes(x = Phase, y = logFC, group = Gene, color = Group),
+  # alpha = 0.75) +
+  labs(title = "logFC of the genes in each gene set betweeen phases") +
+  theme_bw() + 
+  scale_size_area("-log10(adjusted p.value)")
+  scale_colour_manual(name = "Gene set",
+                      breaks = c("Top_Positive_FC"),
+                      labels = c("KRT7+ upregulated"),
+                      values = c("Top_Positive_FC" = "green")) +
+  guides(colour = FALSE) +
+  # facet_wrap(~Group, 
+  #            labeller = labeller(.default = label_value,
+  #              Group = c("Top_Positive_FC" = "KRT7+ upregulated",
+  #                        "Top_Negative_FC" = "KRT7+ downregulated"))) +
+  theme(strip.background = element_rect(fill = "white"), 
+        axis.text.x = element_text(angle = 45, hjust = 1))
+```
 ## Genesets
-```{r plotting_RDsets, eval = FALSE}
+### NES
+```{r plotting_RDsets, eval = TRUE}
 pt.ASH <- read.csv("fgsea_ASH.csv")
 pt.Cirr <- read.csv("fgsea_Cirr.csv")
 pt.AH <- read.csv("fgsea_AH.csv")
 pt.AHsevere <- read.csv("fgsea_AHsevere.csv")
 
 extract_RD <- function(gsea) {
-  gsea[grep("Positive_FC|Negative_FC|Increasing_K|Decreasing_K", 
-              gsea[, "pathway"]), 
+  gsea[grep("Top_", gsea[, "pathway"]), 
        c(1, 3, 5)]
 }
 # Excract the data
 pt.RD.ASH <- extract_RD(pt.ASH)
+pt.RD.N <- pt.RD.ASH
+pt.RD.N$padj <- 0
+pt.RD.N$NES <- 0
 pt.RD.Cirr <- extract_RD(pt.Cirr)
 pt.RD.AH <- extract_RD(pt.AH)
 pt.RD.AHsevere <- extract_RD(pt.AHsevere)
 # Bind the phase
+pt.RD.N <- cbind(pt.RD.N, Phase = "Norm")
 pt.RD.ASH <- cbind(pt.RD.ASH, Phase = "ASH")
 pt.RD.Cirr <- cbind(pt.RD.Cirr, Phase = "Cirr")
 pt.RD.AH <- cbind(pt.RD.AH, Phase = "AH")
 pt.RD.AHsevere <- cbind(pt.RD.AHsevere, Phase = "AHsevere")
 # Join data
-DR_progress <- rbind(pt.RD.ASH, pt.RD.Cirr, pt.RD.AH, pt.RD.AHsevere)
+DR_progress <- rbind(pt.RD.N, pt.RD.ASH, pt.RD.Cirr, pt.RD.AH, pt.RD.AHsevere)
 colnames(DR_progress) <- c("Gene_sets", "padj", "NES", "Phase")
 # Plotting
-ggplot(DR_progress) + geom_point(aes(x = Phase, y = NES, group = Gene_sets, 
-                                     color = Gene_sets, size = 1-padj)) + 
-  labs(title = "Enrichment scores in each phase") + theme_bw()
+ggplot(DR_progress) + 
+  geom_point(aes(x = Phase, y = NES, group = Gene_sets, 
+                 color = Gene_sets, size = -log10(padj))) + 
+  geom_line(aes(x = Phase, y = NES, group = Gene_sets, color = Gene_sets)) +
+  labs(title = "Enrichment scores in each phase") + 
+  theme_bw()
 ```
 
-```{r plotting_earlySets, eval=FALSE, include=FALSE}
-extract_early <- function(gsea) {
-  gsea[grep("early_", gsea[, "pathway"]), c(1, 3, 5)]
-}
-# Excract the data
-pt.early.ASH <- extract_early(pt.ASH)
-pt.early.Cirr <- extract_early(pt.Cirr)
-pt.early.AH <- extract_early(pt.AH)
-pt.early.AHsevere <- extract_early(pt.AHsevere)
-# Bind the phase
-pt.early.ASH <- cbind(pt.early.ASH, Phase = "ASH")
-pt.early.Cirr <- cbind(pt.early.Cirr, Phase = "Cirr")
-pt.early.AH <- cbind(pt.early.AH, Phase = "AH")
-pt.early.AHsevere <- cbind(pt.early.AHsevere, Phase = "AHsevere")
-early_progress <- rbind(pt.early.ASH, pt.early.Cirr, pt.early.AH,
-                        pt.early.AHsevere)
-# Plotting
-ggplot(early_progress) + geom_point(aes(x = Phase, y = NES, group = pathway, 
-                                     color = pathway, size = padj)) + 
-  geom_line(aes(x = Phase, y = NES, group = pathway, color = pathway)) +
-  ggtitle("Enrichment score of different gene sets") + theme_bw()
-```
-
-```{r plotting_lateSets, eval=FALSE, include=FALSE}
+```{r plotting_Sets}
 extract_late <- function(gsea) {
-  gsea[grep("late_", gsea[, "pathway"]), c(1, 3, 5)]
+  gsea[grep("late_brown|early_darkred", gsea[, "pathway"]), c(1, 3, 5)]
 }
 # Excract the data
 pt.late.ASH <- extract_late(pt.ASH)
+pt.late.N <- pt.late.ASH
+pt.late.N$padj <- 0
+pt.late.N$NES <- 0
 pt.late.Cirr <- extract_late(pt.Cirr)
 pt.late.AH <- extract_late(pt.AH)
 pt.late.AHsevere <- extract_late(pt.AHsevere)
 # Bind the phase
+pt.late.N <- cbind(pt.late.N, Phase = "Norm")
 pt.late.ASH <- cbind(pt.late.ASH, Phase = "ASH")
 pt.late.Cirr <- cbind(pt.late.Cirr, Phase = "Cirr")
 pt.late.AH <- cbind(pt.late.AH, Phase = "AH")
 pt.late.AHsevere <- cbind(pt.late.AHsevere, Phase = "AHsevere")
-late_progress <- rbind(pt.late.ASH, pt.late.Cirr, pt.late.AH,
+late_progress <- rbind(pt.late.N, pt.late.ASH, pt.late.Cirr, pt.late.AH,
                         pt.late.AHsevere)
 # Plotting
-ggplot(late_progress) + geom_point(aes(x = Phase, y = NES, group = pathway, 
-                                     color = pathway, size = padj)) + 
+ggplot(late_progress) + 
+  geom_point(aes(x = Phase, y = NES, group = pathway, 
+                 color = pathway, size = -log10(padj))) + 
   geom_line(aes(x = Phase, y = NES, group = pathway, color = pathway)) +
-  ggtitle("Enrichment score of different gene sets") + theme_bw()
+  ggtitle("Enrichment score of different gene sets") + 
+  theme_bw()
 ```
 
+
+```{r plotting_paths}
+extract_late <- function(gsea) {
+  gsea[grep("by_notch$|hippo|kegg_wnt", gsea[, "pathway"], ignore.case = TRUE), 
+       c(1, 3, 5)]
+}
+# Excract the data
+pt.late.ASH <- extract_late(pt.ASH)
+pt.late.N <- pt.late.ASH
+pt.late.N$padj <- 0
+pt.late.N$NES <- 0
+pt.late.Cirr <- extract_late(pt.Cirr)
+pt.late.AH <- extract_late(pt.AH)
+pt.late.AHsevere <- extract_late(pt.AHsevere)
+# Bind the phase
+pt.late.N <- cbind(pt.late.N, Phase = "Norm")
+pt.late.ASH <- cbind(pt.late.ASH, Phase = "ASH")
+pt.late.Cirr <- cbind(pt.late.Cirr, Phase = "Cirr")
+pt.late.AH <- cbind(pt.late.AH, Phase = "AH")
+pt.late.AHsevere <- cbind(pt.late.AHsevere, Phase = "AHsevere")
+late_progress <- rbind(pt.late.N, pt.late.ASH, pt.late.Cirr, pt.late.AH,
+                        pt.late.AHsevere)
+# Plotting
+ggplot(late_progress) + 
+  geom_point(aes(x = Phase, y = NES, group = pathway, 
+                 color = pathway, size = -log10(padj))) + 
+  geom_line(aes(x = Phase, y = NES, group = pathway, color = pathway)) +
+  ggtitle("Enrichment score of different gene sets") + 
+  theme_bw()
+```
+
+```{r plotting_paths2}
+extract_late <- function(gsea) {
+  gsea[grep("by_notch$|hippo|kegg_wnt", gsea[, "pathway"], ignore.case = TRUE), 
+       c(1, 3, 5)]
+}
+# Excract the data
+pt.late.ASH <- extract_late(pt.ASH)
+pt.late.N <- pt.late.ASH
+pt.late.N$padj <- 0
+pt.late.N$NES <- 0
+pt.late.Cirr <- extract_late(pt.Cirr)
+pt.late.AH <- extract_late(pt.AH)
+pt.late.AHsevere <- extract_late(pt.AHsevere)
+# Bind the phase
+pt.late.N <- cbind(pt.late.N, Phase = "Norm")
+pt.late.ASH <- cbind(pt.late.ASH, Phase = "ASH")
+pt.late.Cirr <- cbind(pt.late.Cirr, Phase = "Cirr")
+pt.late.AH <- cbind(pt.late.AH, Phase = "AH")
+pt.late.AHsevere <- cbind(pt.late.AHsevere, Phase = "AHsevere")
+late_progress <- rbind(pt.late.N, pt.late.ASH, pt.late.Cirr, pt.late.AH,
+                        pt.late.AHsevere)
+# Plotting
+ggplot(late_progress) + 
+  geom_point(aes(x = Phase, y = NES, group = pathway, 
+                 color = pathway, size = -log10(padj))) + 
+  geom_line(aes(x = Phase, y = NES, group = pathway, color = pathway)) +
+  ggtitle("Enrichment score of different gene sets") + 
+  theme_bw()
+```
+### logFC
 Perhaps a better way to visualize it is comparing the fold change of each gene set in the different phases:
 
 ```{r plotting_RDsets_FC}
@@ -694,7 +1006,88 @@ fc.AH <- read.csv("gs_AHvsNormal.csv")
 fc.AHsevere <- read.csv("gs_SevereVsNormal.csv")
 # Extract the scores of positive and negative FC sets from DR
 extract_RD <- function(gsea) {
-  gsea[grep("Top_|late_brown|early_darkred", gsea[, "X"]), c(1, 2, 6)]
+  gsea[grep("Top_", gsea[, "X"]), c(1, 2, 6)]
+}
+# Extract the data
+fc.RD.ASH <- extract_RD(fc.ASH)
+fc.RD.N <- fc.RD.ASH
+fc.RD.N$logFC <- 0
+fc.RD.N$adj.P.Val <- 0
+fc.RD.Cirr <- extract_RD(fc.Cirr)
+fc.RD.AH <- extract_RD(fc.AH)
+fc.RD.AHsevere <- extract_RD(fc.AHsevere)
+# Bind the phase
+fc.RD.N <- cbind(fc.RD.N, Phase = "Norm")
+fc.RD.ASH <- cbind(fc.RD.ASH, Phase = "ASH")
+fc.RD.Cirr <- cbind(fc.RD.Cirr, Phase = "Cirr")
+fc.RD.AH <- cbind(fc.RD.AH, Phase = "AH")
+fc.RD.AHsevere <- cbind(fc.RD.AHsevere, Phase = "AHsevere")
+DR_progress <- rbind(fc.RD.N, fc.RD.ASH, fc.RD.Cirr, fc.RD.AH, fc.RD.AHsevere)
+colnames(DR_progress) <- c("Gene_sets", "logFC", "adj.P.Val", "Phase")
+# Plotting
+ggplot(DR_progress) + 
+  # geom_boxplot(aes(x = Phase, y = logFC), outlier.shape = NA) +
+  # geom_boxplot(data = DR_progress_genes,
+               # aes(x = Phase, y = logFC, group = Phase), outlier.shape = NA) +
+  geom_point(aes(x = Phase, y = logFC, group = Gene_sets, 
+                 color = Gene_sets, size = -log10(adj.P.Val))) + 
+  geom_line(aes(x = Phase, y = logFC, group = Gene_sets, color = Gene_sets)) +
+  labs(title = "logFC of the gene sets in each phase of the disease") +
+  theme_bw() +
+  scale_size_area("-log10(adjusted p.value)") +
+  scale_colour_manual(name = "Gene set",
+                      breaks = c("Top_Negative_FC", "Top_Positive_FC"),
+                      labels = c("KRT7+ dowregulated",
+                                 "KRT7+ upregulated"),
+                      values = c("Top_Negative_FC" = "blue", 
+                                 "Top_Positive_FC" = "green")) 
+DR_progress <- DR_progress[DR_progress$Gene_sets != "Top_Negative_FC", ]
+ggplot(DR_progress) + 
+  # geom_boxplot(aes(x = Phase, y = logFC), outlier.shape = NA) +
+  # geom_boxplot(data = DR_progress_genes,
+               # aes(x = Phase, y = logFC, group = Phase), outlier.shape = NA) +
+  geom_point(aes(x = Phase, y = logFC, group = Gene_sets, 
+                 color = Gene_sets, size = -log10(adj.P.Val))) + 
+  geom_line(aes(x = Phase, y = logFC, group = Gene_sets, color = Gene_sets)) +
+  labs(title = "logFC of the gene sets in each phase of the disease") +
+  theme_bw() +
+  scale_size_area("-log10(adjusted p.value)") +
+  scale_colour_manual(name = "Gene set",
+                      breaks = c("Top_Positive_FC"),
+                      labels = c("KRT7+ upregulated"),
+                      values = c("Top_Positive_FC" = "green")) 
+```
+
+
+```{r plot_superpose}
+ggplot(DR_progress_genes, 
+       aes(x = Group, y = logFC, group = Group, color = Group)) +
+  geom_violin(fill = NA) +
+  facet_wrap(~Phase, ncol = 5) +
+  geom_point(aes(size = -log10(adj.P.Val)), alpha = 0.5) +
+  theme_bw()
+ggplot(DR_progress_genes, 
+       aes(x = Phase, y = logFC, group = Phase, color = Group)) +
+  geom_violin(fill = NA) +
+  facet_wrap(~Group, ncol = 5) +
+  geom_point(aes(size = -log10(adj.P.Val)), alpha = 0.5) +
+  theme_bw()
+
+ggplot(DR_progress_genes, aes(x = Phase, y = Gene)) + 
+  geom_tile(aes(fill = logFC), colour = "white") + 
+  facet_wrap(~Group, ncol = 5) +
+  scale_fill_gradient(low = "red", high = "green") + 
+  theme_bw()
+```
+
+```{r plotting_RDsets_modules}
+fc.ASH <- read.csv("gs_ASHvsNormal.csv")
+fc.Cirr <- read.csv("gs_CirrhosisVsNormal.csv")
+fc.AH <- read.csv("gs_AHvsNormal.csv")
+fc.AHsevere <- read.csv("gs_SevereVsNormal.csv")
+# Extract the scores of positive and negative FC sets from DR
+extract_RD <- function(gsea) {
+  gsea[grep("early_darkred|late_brown", gsea[, "X"]), c(1, 2, 6)]
 }
 # Extract the data
 fc.RD.ASH <- extract_RD(fc.ASH)
@@ -721,17 +1114,24 @@ ggplot(DR_progress) +
   theme_bw() +
   scale_size_area("-log10(adjusted p.value)") +
   scale_colour_manual(name = "Gene set",
-                      breaks = c("Top_Negative_FC", "Top_Positive_FC",
-                                 "late_brown", "early_darkred"),
-                      labels = c("KRT7+ dowregulated",
-                               "KRT7+ upregulated", "Brown module", 
-                               "Darkred module"),
-                      values = c("Top_Negative_FC" = "blue", 
-                                 "Top_Positive_FC" = "green",
-                                 "late_brown" = "brown", 
-                                 "early_darkred" = "darkred"))
+                      breaks = c("early_darkred", "late_brown"),
+                      labels = c("Darkred module",
+                                 "Brown module"),
+                      values = c("late_brown" = "brown",
+                                 "early_darkred" = "pink"))
+DR_progress <- DR_progress[DR_progress$Gene_sets == "late_brown", ]
+ggplot(DR_progress) + 
+  geom_point(aes(x = Phase, y = logFC, group = Gene_sets, 
+                 color = Gene_sets, size = -log10(adj.P.Val))) + 
+  geom_line(aes(x = Phase, y = logFC, group = Gene_sets, color = Gene_sets)) +
+  labs(title = "logFC of the gene sets in each phase of the disease") +
+  theme_bw() +
+  scale_size_area("-log10(adjusted p.value)") +
+  scale_colour_manual(name = "Gene set",
+                      breaks = c("late_brown"),
+                      labels = c("Brown module"),
+                      values = c("late_brown" = "brown"))
 ```
-
 
 ```{r plotting_RDsets_phases_FC}
 fc.Cirr.ASH <- read.csv("gs_CirrhosisVsASH.csv")
@@ -767,129 +1167,116 @@ ggplot(DR_progress) +
                                "KRT7+ downregulated"))
 ```
 
-## Genes
-We can observe how the expression of the genes in the set from the ductular reaction change in each phase:
-```{r FC_genes_modules}
-fc.ASH <- read.csv("ASHvsNormal.csv")
-fc.Cirr <- read.csv("CirrhosisVsNormal.csv")
-fc.AH <- read.csv("AHvsNormal.csv")
-fc.AHsevere <- read.csv("SevereVsNormal.csv")
-extract_genes <- function(tt, Phase) {
-  orig <- tt$X %in% unique(c(as.character(RD_signature_up), 
-                             as.character(RD_signature_dw)))
-  df <- tt[orig, c(1, 2, 6)]
-  Group <- ifelse(df$X %in% RD_signature_up, "Top_Positive_FC",
-                  ifelse(df$X %in% RD_signature_dw, "Top_Negative_FC",
-                         "Unclassified"))
-  cbind(df, Group, Phase)
-}
-fc.N <- fc.ASH
-fc.N <- extract_genes(fc.N, "Norm")
-fc.N$logFC <- 0
-fc.N$adj.P.Val <- 10 ^ (-50)
-fc.ASH <- extract_genes(fc.ASH, "ASH")
-fc.Cirr <- extract_genes(fc.Cirr, "Cirr")
-fc.AH <- extract_genes(fc.AH, "AH")
-fc.AHsevere <- extract_genes(fc.AHsevere, "AHsevere")
-DR_progress <- rbind(fc.N, fc.ASH, fc.Cirr, fc.AH, fc.AHsevere)
-colnames(DR_progress) <- c("Gene", "logFC", "adj.P.Val", "Group", "Phase")
-gtRemove <- DR_progress$Gene[DR_progress$adj.P.Val > 0.05]
-DR_progress2 <- DR_progress[!DR_progress$Gene %in% gtRemove, ]
-ggplot(DR_progress2) + 
-  geom_point(aes(x = Phase, y = logFC, group = Gene,
-                 color = Group, size = -log10(adj.P.Val))) +
-  geom_line(aes(x = Phase, y = logFC, group = Gene, color = Group)) +
-  labs(title = "logFC of the genes in each gene set betweeen phases") +
-  theme_bw() + 
-  scale_size_area("-log10(adjusted p.value)") +
-  scale_colour_manual(name = "Gene set",
-                      breaks = c("Top_Positive_FC", "Top_Negative_FC"),
-                      labels = c("KRT7+ upregulated", "KRT7+ downregulated"),
-                      values = c("Top_Negative_FC" = "blue", 
-                                 "Top_Positive_FC" = "green"))
+# Ad hoc
+
+Analysis I got asked to do using pathways from the Ingenuity Pathway Analysis:
+```{r IPA, eval = FALSE}
+ASH <- read.csv("ASHvsNormal.csv")
+Cirr <- read.csv("CirrhosisVsNormal.csv")
+AH <- read.csv("AHvsNormal.csv")
+Severe <- read.csv("SevereVsNormal.csv")
+t <- ASH$t
+names(t) <- ASH$X
+#gses if from ../data/pathways_2.csv taken manually from each column
+gsea.ASH <- fgsea(gses, t, nperm = 100)
+gsea.ASH[, 1:7]
+t <- Cirr$t
+names(t) <- Cirr$X
+gsea.Cirr <- fgsea(gses, t, nperm = 100)
+gsea.Cirr[, 1:7]
+t <- AH$t
+names(t) <- AH$X
+gsea.AH <- fgsea(gses, t, nperm = 100)
+gsea.AH[, 1:7]
+t <- Severe$t
+names(t) <- Severe$X
+gsea.Severe <- fgsea(gses, t, nperm = 100)
+gsea.Severe[, 1:7]
+
+gsea.ASH <- cbind(gsea.ASH, Phase = "ASH")
+gsea.Cirr <- cbind(gsea.Cirr, Phase = "Cirr")
+gsea.AH <- cbind(gsea.AH, Phase = "AH")
+gsea.Severe <- cbind(gsea.Severe, Phase = "Severe")
+gsea_progression <- rbind(gsea.ASH[, c("pathway", "NES", "Phase")],
+                          gsea.Cirr[, c("pathway", "NES", "Phase")],
+                          gsea.AH[, c("pathway", "NES", "Phase")],
+                          gsea.Severe[, c("pathway", "NES", "Phase")])
+gsea_progression$Phase <- as.factor(gsea_progression$Phase)
+gsea_progression$Phase <- factor(gsea_progression$Phase, 
+       levels(gsea_progression$Phase)[c(2, 3, 1, 4)])
+# Plotting
+ggplot(gsea_progression) + 
+  # geom_point(aes(x = Phase, y = NES, group = pathway, 
+                 # color = pathway)) + 
+  geom_line(aes(x = Phase, y = NES, group = pathway, color = pathway)) +
+  labs(title = "Enrichment scores of pathways from IPA in each phase") + 
+  theme_bw()
 ```
 
-
-We can do the same for the early and late genes:
-
-```{r FC_genes_modules_wgcna}
-fc.ASH <- read.csv("ASHvsNormal.csv")
-fc.Cirr <- read.csv("CirrhosisVsNormal.csv")
-fc.AH <- read.csv("AHvsNormal.csv")
-fc.AHsevere <- read.csv("SevereVsNormal.csv")
-extract_genes <- function(tt, Phase) {
-  lb <- as.character(geneIds(gs[["late_brown"]]))
-  ed <- as.character(geneIds(gs[["early_darkred"]]))
-  orig <- tt$X %in% unique(c(lb, ed))
-  df <- tt[orig, c(1, 2, 6)]
-  Group <- ifelse(df$X %in% lb & df$X %in% ed, "Both",
-                  ifelse(df$X %in% ed, "early_darkred",
-                         ifelse(df$X %in% lb, "late_brown", "Misclassified")))
-  cbind(df, Group, Phase)
-}
-fc.N <- fc.ASH
-fc.N <- extract_genes(fc.N, "Norm")
-fc.N$logFC <- 0
-fc.N$adj.P.Val <- 0
-fc.ASH <- extract_genes(fc.ASH, "ASH")
-fc.Cirr <- extract_genes(fc.Cirr, "Cirr")
-fc.AH <- extract_genes(fc.AH, "AH")
-fc.AHsevere <- extract_genes(fc.AHsevere, "AHsevere")
-DR_progress <- rbind(fc.N, fc.ASH, fc.Cirr, fc.AH, fc.AHsevere)
-colnames(DR_progress) <- c("Gene", "logFC", "adj.P.Val", "Group", "Phase")
-gtRemove <- DR_progress$Gene[DR_progress$adj.P.Val > 0.05]
-DR_progress2 <- DR_progress[!DR_progress$Gene %in% gtRemove, ]
-ggplot(DR_progress2) + 
-  geom_point(aes(x = Phase, y = logFC, group = Gene,
-                 color = Group, size = -log10(adj.P.Val))) +
-  geom_line(aes(x = Phase, y = logFC, group = Gene, color = Group)) +
-  labs(title = "logFC of the genes in each gene set betweeen phases") +
-  theme_bw() + 
-  scale_size_area("-log10(adjusted p.value)") +
-  scale_colour_manual(name = "Gene set",
-                      labels = c("Both" = "Both", 
-                                 "late_brown" = "Brown module", 
-                                 "early_darkred" = "Darkred module"),
-                      values = c("Both" = "green",
-                                 "late_brown" = "brown",
-                                 "early_darkred" = "blue"))
+After seeng the previous
+```{r notch_hippo_wnt}
+setsNames <- grep("wnt|by_notch|hippo", names(gs), ignore.case = TRUE, 
+                  value = TRUE)
+setsNames <- setsNames[c(1, 3, 5)]
+ASH <- read.csv("fgsea_ASH.csv")
+Cirr <- read.csv("fgsea_Cirr.csv")
+AH <- read.csv("fgsea_AH.csv")
+Severe <- read.csv("fgsea_AHsevere.csv")
+# Filter
+ASH <- ASH[ASH$pathway %in% setsNames, c("pathway", "padj", "NES")]
+N <- ASH
+N$padj <- 0
+N$NES <- 0
+Cirr <- Cirr[Cirr$pathway %in% setsNames, c("pathway", "padj", "NES")]
+AH <- AH[AH$pathway %in% setsNames, c("pathway", "padj", "NES")]
+Severe <- Severe[Severe$pathway %in% setsNames, c("pathway", "padj", "NES")]
+# Add phase
+N <- cbind(N, Phase = "Norm")
+ASH <- cbind(ASH, Phase = "ASH")
+Cirr <- cbind(Cirr, Phase = "Cirr")
+AH <- cbind(AH, Phase = "AH")
+Severe <- cbind(Severe, Phase = "Severe")
+gsea_progression <- rbind(N, ASH, Cirr, AH, Severe)
+# Plot
+ggplot(gsea_progression) + 
+  geom_point(aes(x = Phase, y = NES, group = pathway,
+                 color = pathway, size = -log10(padj))) +
+  geom_line(aes(x = Phase, y = NES, group = pathway, color = pathway)) +
+  labs(title = "Enrichment scores of pathways") + 
+  theme_bw()
 ```
-We can see the change of the gene with the previous phase:
 
-```{r FC_genes_modules_inter}
-fc.ASH <- read.csv("ASHvsNormal.csv")
-fc.Cirr <- read.csv("CirrhosisVsASH.csv")
-fc.AH <- read.csv("AHvsCirrhosis.csv")
-fc.AHsevere <- read.csv("SevereVsHepatitis.csv")
-extract_genes <- function(tt, Phase) {
-  orig <- tt$X %in% unique(c(as.character(RD_signature_up), 
-                             as.character(RD_signature_dw)))
-  df <- tt[orig, c(1, 2, 6)]
-  Group <- ifelse(df$X %in% RD_signature_up, "Top_Positive_FC",
-                  ifelse(df$X %in% RD_signature_dw, "Top_Negative_FC",
-                         "Unclassified"))
-  cbind(df, Group, Phase)
-}
-# fc.N <- fc.ASH
-# fc.N <- extract_genes(fc.N, "Norm")
-# fc.N$logFC <- 0
-# fc.N$adj.P.Val <- 0
-fc.ASH <- extract_genes(fc.ASH, "ASHvsNormal")
-fc.Cirr <- extract_genes(fc.Cirr, "CirrVsASH")
-fc.AH <- extract_genes(fc.AH, "AHvsCirr")
-fc.AHsevere <- extract_genes(fc.AHsevere, "AHsevereVsAH")
-DR_progress <- rbind(fc.ASH, fc.Cirr, fc.AH, fc.AHsevere)
-colnames(DR_progress) <- c("Gene", "logFC", "adj.P.Val", "Group", "Phase")
-ggplot(DR_progress) + 
-  geom_point(aes(x = Phase, y = logFC, group = Gene, 
-                 color = Group, size = -log10(adj.P.Val))) + 
-  geom_line(aes(x = Phase, y = logFC, group = Gene, color = Group)) +
-  labs(title = "logFC of the genes in each gene set betweeen phases") +
-  theme_bw() + 
-  scale_size_area("-log10(adjusted p.value)") +
-  scale_color_discrete(name = "Gene set",
-                       breaks = c("Top_Negative_FC", "Top_Positive_FC"),
-                       labels = c("KRT7+ downregulated", "KRT7+ upregulated"))
+```{r}
+ASH <- read.csv("gs_ASHvsNormal.csv")
+Cirr <- read.csv("gs_CirrhosisVsNormal.csv")
+AH <- read.csv("gs_AHvsNormal.csv")
+Severe <- read.csv("gs_SevereVsNormal.csv")
+# Filter
+ASH <- ASH[ASH$X %in% setsNames, c("X", "adj.P.Val", "logFC")]
+Cirr <- Cirr[Cirr$X %in% setsNames, c("X", "adj.P.Val", "logFC")]
+AH <- AH[AH$X %in% setsNames, c("X", "adj.P.Val", "logFC")]
+Severe <- Severe[Severe$X %in% setsNames, c("X", "adj.P.Val", "logFC")]
+# Add phase
+N <- cbind(ASH, Phase = "Norm")
+N$logFC <- 0
+N$adj.P.Val <- 0
+ASH <- cbind(ASH, Phase = "ASH")
+Cirr <- cbind(Cirr, Phase = "Cirr")
+AH <- cbind(AH, Phase = "AH")
+Severe <- cbind(Severe, Phase = "Severe")
+gsea_progression <- rbind(N, ASH, Cirr, AH, Severe)
+# Plot
+ggplot(gsea_progression) + 
+  geom_point(aes(x = Phase, y = logFC, group = X,
+                 color = X, size = -log10(adj.P.Val))) +
+  geom_line(aes(x = Phase, y = logFC, group = X, color = X)) +
+  labs(title = "Enrichment scores of pathways") + 
+  theme_bw()
+```
+Venn diagram:
+```{r}
+library("VennDiagram")
+venn.diagram(geneIds(gs[c("late_brown", "early_darkred")]), "venn_late_early.png", imagetype = "png", fill = c("brown", "pink"))
 ```
 
 # SessionInfo

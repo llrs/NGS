@@ -16,52 +16,94 @@ knitr::opts_chunk$set(tidy = FALSE, echo = TRUE, cache = TRUE, autodep = TRUE)
 # load
 
 ```{r read}
-mice <- read.csv("../data/mice_microarrays.csv")
-ddc_up <- mice$Symbol[mice$fc_DDC..vs..SA. > 1.5]
-ddc_up <- toupper(as.character(ddc_up))
-ddc_dw <- mice$Symbol[mice$fc_DDC..vs..SA. < -1.5]
-ddc_dw <- toupper(as.character(ddc_dw))
+mice <- read.csv("../data/mice_all.csv")
+conversion <- read.delim("../data/HMD_HumanPhenotype.csv")
+mice <- merge(mice, conversion, by.x = "Symbol", by.y = "GENMM", all.x = TRUE)
+mice$GENHS <- as.character(mice$GENHS)
+ddc_up <- mice$GENHS[mice[, 12] > 2] # DDC+ vs SA- /comparison2
+ddc_dw <- mice$GENHS[mice[, 12] < -2] 
 ```
 We can check the enrichment of the modules from the human data set
 ```{r gsea}
-myTval <- mice$t_comparison5
-names(myTval) <- toupper(mice$Symbol)
+ddc <- mice$t_comparison2
+names(ddc) <- mice$GENHS
 load("Gene_sets.RData", verbose = TRUE)
 library("fgsea")
+library("ggplot2")
 paths <- list(Top_Positive_FC = geneIds(gs[["Top_Positive_FC"]]), 
+              Positive_FC =  geneIds(gs[["Positive_FC"]]),
            Top_Negative_FC = geneIds(gs[["Top_Negative_FC"]]), 
            Top100_Increasing_K = geneIds(gsc_K[["Top100_Increasing_K"]]),
            Top100_Decreasing_K = geneIds(gsc_K[["Top100_Decreasing_K"]]),
-           early_darkgreen = geneIds(gs[["early_darkgreen"]]),
-           late_black = geneIds(gs[["late_black"]]))
+           early_darkred = geneIds(gs[["early_darkred"]]),
+           late_brown = geneIds(gs[["late_brown"]]))
 
-fgseaRes <- fgsea(pathways = paths, stats = myTval, 
+fgseaRes_ddc <- fgsea(pathways = paths, stats = ddc, 
                   nperm = 1000)
-plotEnrichment(geneIds(gs[["Top_Positive_FC"]]), myTval) +
-  ggtitle("Positive FC in DR")
-plotEnrichment(geneIds(gs[["Top_Negative_FC"]]), myTval) +
-  ggtitle("Negative FC in DR")
-plotEnrichment(geneIds(gs[["late_black"]]), myTval) +
-  ggtitle("Black Module")
-plotEnrichment(geneIds(gs[["early_darkgreen"]]), myTval) +
-  ggtitle("Early darkgreen")
-plotEnrichment(geneIds(gsc_K[["Top100_Increasing_K"]]), myTval) +
-  ggtitle("Increasing K")
-plotEnrichment(geneIds(gsc_K[["Top100_Decreasing_K"]]), myTval) +
+plotEnrichment(geneIds(gs[["Top_Positive_FC"]]), ddc) +
+  ggtitle("KRT7 positive in MD") + xlab("rank (t) of DDC+ vs SA-")
+plotEnrichment(geneIds(gs[["late_brown"]]), ddc) +
+  ggtitle("Brown Module") + xlab("rank (t) of DDC+ vs SA-")
+plotEnrichment(geneIds(gs[["early_darkred"]]), ddc) +
+  ggtitle("Darkred Module") + xlab("rank (t) of DDC+ vs SA-")
+plotEnrichment(geneIds(gsc_K[["Top100_Increasing_K"]]), ddc) +
+  ggtitle("Increasing K") + xlab("rank (t) of DDC+ vs SA-")
+plotEnrichment(geneIds(gsc_K[["Top100_Decreasing_K"]]), ddc) +
   ggtitle("Decreasing K")
 ```
+DCE:
+```{r}
+cde <- mice$t_comparison1
+names(cde) <- mice$GENHS
+fgseaRes_cde <- fgsea(pathways = paths, stats = cde, 
+                  nperm = 1000)
+plotEnrichment(geneIds(gs[["Top_Positive_FC"]]), cde) +
+  ggtitle("Positive FC in MD") + xlab("rank (t) of CDE+ vs SA-")
+plotEnrichment(geneIds(gs[["late_brown"]]), cde) +
+  ggtitle("Brown Module") + xlab("rank (t) of CDE+ vs SA-")
+plotEnrichment(geneIds(gs[["early_darkred"]]), cde) +
+  ggtitle("Darkred Module") + xlab("rank (t) of CDE+ vs SA-")
+```
+DDC vs CDE
+```{r}
+cde_ddc <- mice$t_comparison6
+names(cde_ddc) <- mice$GENHS
+ddc_cde <- -sign(cde_ddc)*abs(cde_ddc)
+fgseaRes_ddc_cde <- fgsea(pathways = paths, stats = ddc_cde, 
+                  nperm = 1000)
+plotEnrichment(geneIds(gs[["Top_Positive_FC"]]), ddc_cde) +
+  ggtitle("Signature KRT7+") + xlab("rank (t) of DDC+ vs CDE+")
+plotEnrichment(geneIds(gs[["late_brown"]]), ddc_cde) +
+  ggtitle("Brown Module") + xlab("rank (t) of DDC+ vs CDE+")
+plotEnrichment(geneIds(gs[["early_darkred"]]), ddc_cde) +
+  ggtitle("Darkred Module") + xlab("rank (t) of DDC+ vs CDE+")
+plotEnrichment(names(gs[["Top_Positive_FC"]]), ddc_cde) +
+  ggtitle("KRT7+ overexpressed genes") + xlab("rank (t) of DDC+ vs CDE+")
+```
+To export as a preranked list to GSEA java application
+```{r}
+m <- mice[, c("GENHS", "t_comparison6")]
+m$t_comparison6 <- -sign(m$t_comparison6)*abs(m$t_comparison6)
+write.table(m,file = "expression.rnk", quote = FALSE,
+            sep = "\t", row.names = FALSE, 
+            col.names = FALSE)
+```
+
 
 # Reactome
 ```{r}
+library("org.Hs.eg.db")
 entrez_up <- mapIds(org.Hs.eg.db, keys = toupper(as.character(ddc_up)), 
                     keytype = "SYMBOL", column = "ENTREZID")
 entrez_chip <- mapIds(org.Hs.eg.db, keys = toupper(as.character(mice$Symbol)), 
                       keytype = "SYMBOL", column = "ENTREZID")
+library("ReactomePA")
 reactome_enrich <- enrichPathway(gene = entrez_up,
                                  universe = entrez_chip,
                                  pvalueCutoff = 0.05, readable = TRUE,
                                  minGSSize = 2, maxGSSize = 2000)
-write.csv(as.data.frame(reactome_enrich), file = "reactome_DDC_up.csv", row.names = FALSE)
+write.csv(as.data.frame(reactome_enrich), file = "reactome_DDC_up_fc2.csv", 
+          row.names = FALSE)
 ```
 
 # Kegg
@@ -70,27 +112,25 @@ library("clusterProfiler")
 kegg_enrich <- enrichKEGG(entrez_up,
                           universe = entrez_chip,
                           minGSSize = 2, maxGSSize = 2000)
-write.csv(as.data.frame(kegg_enrich), file = "kegg_DDC_up.csv", row.names = FALSE)
+write.csv(as.data.frame(kegg_enrich), file = "kegg_DDC_up_fc2.csv", row.names = FALSE)
 ```
 
 # topGO
 
 ```{r topGO}
-library("org.Hs.eg.db")
-library("org.Mm.eg.db")
-genes <-  mice$fc_DDC..vs..SA.
+library("topGO")
+genes <-  mice[, 12]
 names(genes) <- toupper(mice$Symbol)
 topGOdata_ddc <- new("topGOdata",
                  ontology = "BP",
                  allGenes = genes,
                  geneSelectionFun = function(x) {
-                   x > 1.5},
+                   x > 2},
                  description = "GO of Mice",
                  annot = annFUN.org,
-                 # Even if it is mice it is annotated with human genes names
+                 # Even if it is mice it is better annotated with human genes
                  mapping = "org.Hs.eg.db",
-                 ID = "symbol"
-                 )
+                 ID = "symbol")
 ```
 
 ```{r GOtest}
@@ -100,22 +140,26 @@ resultKS.elim <- runTest(topGOdata_ddc, algorithm = "elim", statistic = "ks")
 allRes <- GenTable(topGOdata_ddc, weight01 = weight01,
                    elim = resultKS.elim, classic = resultFisher, 
                    topNodes = 50, numChar = 1000)
-write.csv(allRes, "GO_function_DDC_up.csv")
+write.csv(allRes, "GO_function_DDC_up_fc2.csv")
 ```
 
 # topGO for other datasets
 ```{r topGO3}
 rm(list=ls())
+DRs <- read.csv("DR_PosVsNeg.csv")
+DRs <- DRs[order(abs(DRs$logFC), DRs$adj.P.Val, decreasing = c(TRUE, FALSE), method = "radix"), ]
+FC <- DRs$logFC
+names(FC) <- DRs$Symbol
+FC <- FC[!duplicated(names(FC))]
 DR_topGO <- new("topGOdata",
                  ontology = "BP",
-                 allGenes = genes,
+                 allGenes = FC,
                  geneSelectionFun = function(x) {
-                   x > 4},
+                   x >= 1},
                  description = "GO of DR",
                  annot = annFUN.org,
                  mapping = "org.Hs.eg.db",
-                 ID = "symbol"
-                 )
+                 ID = "symbol")
 ```
 
 ```{r GOtest3}
@@ -125,14 +169,14 @@ resultKS.elim <- runTest(DR_topGO, algorithm = "elim", statistic = "ks")
 allRes <- GenTable(DR_topGO, weight01 = weight01,
                    elim = resultKS.elim, classic = resultFisher, 
                    topNodes = 50, numChar = 1000)
-write.csv(allRes, "GO_function_DR_up.csv")
+write.csv(allRes, "GO_function_DR_up_fc2.csv")
 ```
 
 ```{r topGO4}
 rm(list = ls())
 load("Gene_sets.RData", verbose = TRUE)
 genes <- as.character(unlist(geneIds(gsc_early)))
-d <- as.factor(as.numeric(genes %in% geneIds(gsc_early[["early_darkgreen"]])))
+d <- as.factor(as.numeric(genes %in% geneIds(gsc_early[["early_darkred"]])))
 names(d) <- genes
 early_topGO <- new("topGOdata",
                  ontology = "BP",
